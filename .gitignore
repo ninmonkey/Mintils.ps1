@@ -1,0 +1,13 @@
+# Ignore test files
+Scrap.*
+**/Scrap
+
+# common "binaries"
+*.{exe,dll,zip}
+*.{docx,xlsx,pbix,pbip}
+
+# Images
+*.{png,gif}
+
+# other text files
+*.{log,csv,json,tmp,txt}
