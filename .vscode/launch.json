@@ -1,0 +1,43 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Pwsh: Debug_Harness.ps1",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${workspaceFolder}/test/debug_harness.ps1",
+            "cwd": "${cwd}",
+            "presentation": {
+                "hidden": false,
+                "group": " ",
+                "order": 1
+            }
+        },
+        {
+            "name": "Pwsh: Session",
+            "type": "PowerShell",
+            "request": "launch",
+            "cwd": "${cwd}",
+            "presentation": {
+                "hidden": false,
+                "group": " ",
+                "order": 2
+            }
+        },
+        {
+            "name": "Pwsh: Module Session",
+            "type": "PowerShell",
+            "request": "launch",
+            // "script": "\"Import-Module -Force /path/to/module.psd1|dll\""
+            "script": "Enter command to import your binary module, for example: \"Import-Module -Force /path/to/module.psd1|dll\"",
+            "presentation": {
+                "hidden": false,
+                "group": " ",
+                "order": 3
+            }
+        }
+    ]
+}
