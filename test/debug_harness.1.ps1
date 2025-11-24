@@ -4,15 +4,13 @@
 'Import...' | Write-Verbose -Verbose
 
 
-return
-. (gi -ea 'stop' 'H:\data\2025\GitRepos.🐒\Mintils.ps1\Commands\Get-MintilsTypeHelp.ps1' )
-. (gi -ea 'stop' 'H:\data\2025\GitRepos.🐒\Mintils.ps1\Commands\Find-MintilsTypeName.ps1' )
+. 'H:\data\2025\GitRepos.🐒\Mintils.ps1\Commands\Get-MintilsTypeHelp.ps1'
 
 Mint.Get-TypeHelp 'System.TimeZoneInfo'
 Mint.Get-TypeHelp -Name System.Int64 -Verbose
 
 'Find invalid type using -WithoutError' | Write-verbose -verbose
-Find-MintilsTypeName 'TimeZoneInfoffd' -WithoutError
+Find-MintilsTypeByName 'TimeZoneInfoffd' -WithoutError
 
 'Find _fromMethod urls' | Write-Verbose -Verbose
 function _fromMethod {
