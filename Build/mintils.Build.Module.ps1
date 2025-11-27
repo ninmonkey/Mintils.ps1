@@ -22,11 +22,13 @@ $commands_summary.AddRange(
         | %{
             $item = $_
             [pscustomobject]@{
-                PSTypeName   = 'build.mintils.command.public'
+                PSTypeName    = 'build.mintils.command.public'
                 Public        = $true
                 Name          = $Item.Name
                 Size          = '{0:n2} kb' -f ( $Item.Length / 1kb )
                 LastWriteTime = $Item.LastWriteTime
+                # Path          = $Item
+                FullName      = $Item                                  # convert to alias
                 # Documentation = ''
                 # HasRequiresStatment        = $false
                 # HasUsingNamespaceStatement = $false
@@ -37,20 +39,13 @@ $commands_summary.AddRange(
 
 $destinationRoot = $myRoot
 
-$commands_public
+$commands_summary
     | Join-String -f "`n {0}" -op 'Commands' -p {
         [System.IO.Path]::GetRelativePath( $myRoot, $_.FullName )
     }
     | Write-Host -fg 'magenta'
-
 Pop-Location -Stack 'mintils.build'
 
-write-warning 'WIP: Now drop files
-
-  - [0] are not ps1 types
-  - [1] that are prefixed "scrap"
-
-'
 return
 if ($commands_public) {
     $myFormatFile = Join-Path $destinationRoot "$myModuleName.format.ps1xml"
