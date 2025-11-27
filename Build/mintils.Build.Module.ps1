@@ -46,6 +46,18 @@ $commands_summary
     | Write-Host -fg 'magenta'
 Pop-Location -Stack 'mintils.build'
 
+if( $commands_summary.count -gt 0 ) {
+    $myModuleFile = Join-Path $DestinationRoot "${myModuleName}.psm1"
+
+    @(
+        # todo: optimize IO. And minimize any extra memory allocations for strings
+        foreach ( $item in $commands_summary )  {
+            gc -raw (Get-Item $item.FullName )
+            "`n"
+        }
+    )
+    | Set-Content -Path $MyModuleFile -encoding UTF8 -Confirm
+}
 return
 if ($commands_public) {
     $myFormatFile = Join-Path $destinationRoot "$myModuleName.format.ps1xml"
