@@ -53,7 +53,7 @@
             Whitelist = @()
         }
         PSAvoidLongLines = @{
-            MaximumLineLength = 120
+            MaximumLineLength = 160
         }
         PSUseConsistentIndentation = @{
             IndentationSize = 4

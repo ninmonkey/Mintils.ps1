@@ -1,12 +1,26 @@
 ﻿#requires -PSEdition Core
 #requires -Modules pansies, ClassExplorer
 'Rebuild...'  | Write-Verbose -Verbose
-'Import...' | Write-Verbose -Verbose
+'Import...'   | Write-Verbose -Verbose
 
+
+@'
+Left off
+
+- [ ] this imports the actual module by psd1
+- [ ] ensure ./Build/mintils.build.ps1 builds psd1
+
+'@
+    | Write-Host -fg 'magenta' -bg 'gray20'
+
+. (Get-Item -ea stop (Join-Path $PSScriptRoot './../Build/mintils.Build.Module.ps1') )
 
 return
-. (gi -ea 'stop' 'H:\data\2025\GitRepos.🐒\Mintils.ps1\Commands\Get-MintilsTypeHelp.ps1' )
-. (gi -ea 'stop' 'H:\data\2025\GitRepos.🐒\Mintils.ps1\Commands\Find-MintilsTypeName.ps1' )
+Import-Module Mintils -passThru -Force -ea 'stop'
+
+return
+# . (Get-Item -ea 'stop' 'H:\data\2025\GitRepos.🐒\Mintils.ps1\Commands\Get-MintilsTypeHelp.ps1' )
+# . (Get-Item -ea 'stop' 'H:\data\2025\GitRepos.🐒\Mintils.ps1\Commands\Find-MintilsTypeName.ps1' )
 
 Mint.Get-TypeHelp 'System.TimeZoneInfo'
 Mint.Get-TypeHelp -Name System.Int64 -Verbose
