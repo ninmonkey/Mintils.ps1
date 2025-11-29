@@ -17,7 +17,9 @@ $destinationRoot = $myRoot
 
 if ($formatting) {
     $myFormatFile = Join-Path $destinationRoot "$myModuleName.format.ps1xml"
-    $formatting | Out-FormatData -Module $MyModuleName | Set-Content $myFormatFile -Encoding UTF8
+    $formatting
+        | Out-FormatData -Module $MyModuleName
+        | Set-Content $myFormatFile -Encoding UTF8 -Confirm
     Get-Item $myFormatFile
 }
 
@@ -34,7 +36,7 @@ if ($types) {
     $myTypesFile = Join-Path $destinationRoot "$myModuleName.types.ps1xml"
     $types
         | Out-TypeData
-        | Set-Content $myTypesFile -Encoding UTF8
+        | Set-Content $myTypesFile -Encoding UTF8 -Confirm
 
     Get-Item $myTypesFile
 }

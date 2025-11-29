@@ -1,4 +1,4 @@
-﻿# requires -Module ClassExplorer
+﻿# was: requires -Module ClassExplorer
 
 function Find-MintilsTypeName {
     <#

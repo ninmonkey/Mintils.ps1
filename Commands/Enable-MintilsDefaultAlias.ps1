@@ -19,14 +19,20 @@
     if( $PSBoundParameters.ContainsKey('Force') ) { $splat.Force = $Force }
     if( $PSBoundParameters.ContainsKey('Scope') ) { $splat.Scope = $Scope }
 
+    $splat = @{ PassThru = $true }
     @(
         # Set-Alias -PassThru -Name 'ls'   -Value Get-ChildItem
-        Set-Alias -PassThru -Name 'sc'   -Value Set-Content
-        Set-Alias -PassThru -Name 'cl'   -Value Set-Clipboard # -Force:$true
-        Set-Alias -PassThru -Name 'gcl'  -Value Get-Clipboard # -Force:$true
-        Set-Alias -PassThru -Name 'impo' -Value Import-Module # -Force:$true
-        Set-Alias -PassThru -Name 'Json.From' -Value 'ConvertFrom-Json'
-        Set-Alias -PassThru -Name 'Json'      -Value 'ConvertTo-Json'
+        Set-Alias @splat -Name 'sc'   -Value Set-Content
+        Set-Alias @splat -Name 'cl'   -Value Set-Clipboard # -Force:$true
+        Set-Alias @splat -Name 'gcl'  -Value Get-Clipboard # -Force:$true
+        Set-Alias @splat -Name 'impo' -Value Import-Module # -Force:$true
+        Set-Alias @splat -Name 'Json.From' -Value 'ConvertFrom-Json'
+        Set-Alias @splat -Name 'Json'      -Value 'ConvertTo-Json'
+
+        # aggressive aliases include aliases that don't have a prefix of 'mint'
+        Set-Alias @splat -Name 'RelPath' -Value 'Mintils\Format-MintilsRelativePath'
+        Set-Alias @splat -Name 'Goto' -Value 'Mintils\Push-MintilsLocation'
+
     )   | Sort-Object
         | Join-String -f "`n - {0}" -op 'Mintils Set-Alias: ' -p {
             $pre, $rest = $_.DisplayName -split ' -> ', 2
