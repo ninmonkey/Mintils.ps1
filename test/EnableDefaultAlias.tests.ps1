@@ -1,7 +1,4 @@
-﻿
-
-<#
-
+﻿<#
 
 #>
 
@@ -14,7 +11,7 @@ Describe 'Aggressive Aliases only import if requested' {
         remove-module mintils -Force -ea ignore
         remove-alias 'RelPath' -ea Ignore
         ## (Import-Module $ModPath -Force -Verbose -PassThru).ExportedCommands.Values
-        (Import-Module $ModPath -Force -Verbose -PassThru).Name | Write-host
+        (Import-Module $ModPath -Force <# -Verbose #> -PassThru).Name | Write-host
         # Get-alias 'RelPath' -ea ignore
         # Get-alias 'RelPath' -ea ignore
         {
@@ -32,15 +29,12 @@ Describe 'Aggressive Aliases only import if requested' {
         remove-module mintils -Force -ea ignore
         remove-alias 'RelPath' -ea Ignore
         ## (Import-Module $ModPath -Force -Verbose -PassThru).ExportedCommands.Values
-        (Import-Module $ModPath -Force -Verbose -PassThru).Name | Write-host
-        # Get-alias 'RelPath' -ea ignore
-        # Get-alias 'RelPath' -ea ignore
+        (Import-Module $ModPath -Force <# -Verbose #> -PassThru).Name | Write-host
         {
             Mint.Enable-DefaultAlias
             Get-alias 'RelPath'
             Get-Item . | relPath -RelativeTo (gi '.')
-        } | Should -Throw -Because 'Alias should not automatically import'
+        } | Should -Not -Throw -Because 'Alias should not automatically import'
 
     }
 }
-#gi . | relPath -RelativeTo (gi '.')

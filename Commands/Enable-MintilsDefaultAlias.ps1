@@ -23,9 +23,6 @@
     if( $PSBoundParameters.ContainsKey('Scope') -or (-not [string]::IsNullOrWhiteSpace( $Scope ) ) ) {
         $splat.Scope = $Scope
     }
-    # if( -not [String]::IsEmptyOrWhitespace( $Scope ) ) { $splat.Scope = $Global }
-
-    $PSBoundParameters | ConvertTO-Json | write-Host -fg yellow -bg 'gray10'
     @(
         # Set-Alias -PassThru -Name 'ls'   -Value Get-ChildItem
         Set-Alias @splat -Name 'sc'   -Value Set-Content
