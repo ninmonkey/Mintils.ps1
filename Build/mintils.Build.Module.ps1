@@ -5,6 +5,10 @@
 $myFile       = $MyInvocation.MyCommand.ScriptBlock.File
 $myModuleName = 'mintils'
 $myRoot       = $myFile | Split-Path | Split-Path
+$BuildConfig = {
+    LineEnding = "`r`n"
+}
+
 Push-Location -Stack 'mintils.build' $myRoot
 $commands_public   = @(
     # to recurse or not ?
@@ -52,18 +56,18 @@ if( $commands_summary.count -gt 0 ) {
     @(
         # todo: optimize IO. And minimize any extra memory allocations for strings
         foreach ( $item in $commands_summary )  {
-            gc -raw (Get-Item $item.FullName )
-            "`n"
+            ( Get-Content -raw (Get-Item $item.FullName ) ) -replace '\r?\n', $BuildConfig.LineEnding
         }
     )
-    | Set-Content -Path $MyModuleFile -encoding UTF8 -Confirm
+    | Join-String -sep $BuildConfig.LineEnding
+    | Set-Content -Path $MyModuleFile -encoding UTF8 -ProgressAction Continue # -Confirm
 }
 return
 if ($commands_public) {
     $myFormatFile = Join-Path $destinationRoot "$myModuleName.format.ps1xml"
     $commands_public
         | Out-FormatData -Module $MyModuleName
-        | Set-Content $myFormatFile -Encoding UTF8 -Confirm
+        | Set-Content $myFormatFile -Encoding UTF8 -Verbose -ProgressAction Continue # -Confirm
     Get-Item $myFormatFile
 }
 
@@ -80,7 +84,7 @@ if ($types) {
     $myTypesFile = Join-Path $destinationRoot "$myModuleName.types.ps1xml"
     $types
         | Out-TypeData
-        | Set-Content $myTypesFile -Encoding UTF8 -Confirm
+        | Set-Content $myTypesFile -Encoding UTF8 -Verbose -ProgressAction Continue # -Confirm
 
     Get-Item $myTypesFile
 }
