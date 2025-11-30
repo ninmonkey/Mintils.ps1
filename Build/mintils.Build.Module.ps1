@@ -5,7 +5,7 @@
 $myFile       = $MyInvocation.MyCommand.ScriptBlock.File
 $myModuleName = 'mintils'
 $myRoot       = $myFile | Split-Path | Split-Path
-$BuildConfig = {
+$BuildConfig = @{
     LineEnding = "`r`n"
 }
 
