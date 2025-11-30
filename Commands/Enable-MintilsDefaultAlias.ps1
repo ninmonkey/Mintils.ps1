@@ -12,14 +12,20 @@
         [switch] $Force,
 
         [ArgumentCompletions('Global', 'Local', 'Script')]
-        [string] $Scope
+        [string] $Scope = 'Global'
     )
 
-    $splat = @{}
+    $splat = @{
+        PassThru = $True
+    }
+    # note: PSBoundParameters does not contain default values
     if( $PSBoundParameters.ContainsKey('Force') ) { $splat.Force = $Force }
-    if( $PSBoundParameters.ContainsKey('Scope') ) { $splat.Scope = $Scope }
+    if( $PSBoundParameters.ContainsKey('Scope') -or (-not [string]::IsNullOrWhiteSpace( $Scope ) ) ) {
+        $splat.Scope = $Scope
+    }
+    # if( -not [String]::IsEmptyOrWhitespace( $Scope ) ) { $splat.Scope = $Global }
 
-    $splat = @{ PassThru = $true }
+    $PSBoundParameters | ConvertTO-Json | write-Host -fg yellow -bg 'gray10'
     @(
         # Set-Alias -PassThru -Name 'ls'   -Value Get-ChildItem
         Set-Alias @splat -Name 'sc'   -Value Set-Content
