@@ -1,5 +1,12 @@
 When will commands and aliases auto import the module?
 
+### [0] Using `Mint.Enable-DefaultAlias` 
+
+You can **opt-in** to having aggressive aliases. 
+
+See [Enable-DefaultAlias](../test/EnableDefaultAlias.tests.ps1)
+
+
 ### [1] Full command Names will auto-import the module
 
 ```ps1
