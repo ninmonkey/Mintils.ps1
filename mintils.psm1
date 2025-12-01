@@ -12,14 +12,17 @@ function Enable-MintilsDefaultAlias {
         [switch] $Force,
 
         [ArgumentCompletions('Global', 'Local', 'Script')]
-        [string] $Scope
+        [string] $Scope = 'Global'
     )
 
-    $splat = @{}
+    $splat = @{
+        PassThru = $True
+    }
+    # note: PSBoundParameters does not contain default values
     if( $PSBoundParameters.ContainsKey('Force') ) { $splat.Force = $Force }
-    if( $PSBoundParameters.ContainsKey('Scope') ) { $splat.Scope = $Scope }
-
-    $splat = @{ PassThru = $true }
+    if( $PSBoundParameters.ContainsKey('Scope') -or (-not [string]::IsNullOrWhiteSpace( $Scope ) ) ) {
+        $splat.Scope = $Scope
+    }
     @(
         # Set-Alias -PassThru -Name 'ls'   -Value Get-ChildItem
         Set-Alias @splat -Name 'sc'   -Value Set-Content
@@ -40,7 +43,154 @@ function Enable-MintilsDefaultAlias {
         } | Write-Host -fg 'goldenrod'
 }
 
+function Find-MintilsAppCommand {
+    <#
+    .synopsis
+        Find the location and versions of Application/CommandInfo/native commands
+    .notes
+        When using "Gcm -All", this only tests "--version" for the first of each group
+    .example
+        Mint.Find-AppCommand 'npm', 'node', 'pnpm'
+    .example
+        # Syntax highlight /w bat
+        Find-MintilsAppCommand 'npm', 'node', 'pwsh' -AsOutputType yaml -withoutAll | bat -l yml
+    .example
+        # basic, with extra sources
+        Find-MintilsAppCommand 'npm', 'node', 'pwsh' | ft
+    .example
+        Find-MintilsAppCommand 'npm', 'node', 'pwsh' -FilterCommandType Application, ExternalScript
+    #>
+    [Alias('Mint.Find-AppCommand')]
+    [OutputType( 'Mintils.AppCommand.Info' )]
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, Position = 0)]
+        [string[]] $CommandName,
 
+        # Filter by "Get-Command -CommandTypes"
+        [Management.Automation.CommandTypes[]] $FilterCommandType,
+
+        # Also Convert to yaml/json before output. Drops properties that don't serialize cleanly by default.
+        # object and default are equal to using -PassThru
+        [ArgumentCompletions('yaml', 'json', 'object')]
+        [string] $AsOutputType,
+
+        # skips -all
+        [Alias('FirstOnly')]
+        [switch] $withoutAll
+    )
+    begin {
+        [Collections.Generic.List[Object]] $summary = @()
+    }
+    process {
+        $splat = @{
+        }
+        if( -not $WithoutAll ) { $splat['All'] = $True }
+        if( $null -ne $FilterCommandType ) { $splat.CommandType = $FilterCommandType}
+
+        foreach( $curName in $CommandName ) {
+            [int] $orderId = 0
+            $cmdInfo = @( Get-Command @splat -Name $curName )
+
+            # for now, only capture version of the first item
+            $maybeVer = & $cmdInfo[0] @('--version')
+            foreach( $item in $cmdInfo ) {
+                $psco = [pscustomobject]@{
+                    PSTypeName    = 'Mintils.AppCommand.Info'
+                    Name          = $curName
+                    Version       = $maybeVer
+                    Path          = $Item.Source
+                    CommandType   = $item.GetType().Name
+                    CommandInfo   = $Item
+                    GroupOrder    = $orderId++
+                    LastWriteTime = (Get-Item $Item.Source).LastWriteTime
+                }
+                # signify version is duplicate on the rest
+                $maybeVer = ''
+                $summary.Add( $psco )
+            }
+        }
+    }
+    end {
+        switch( $AsOutputType ) {
+            'json' {
+                $summary
+                    | Select-Object -ExcludeProp 'CommandInfo'
+                    | ConvertTo-Json -depth 2
+                break
+             }
+            'yaml' {
+                $summary
+                    | Select-Object -ExcludeProp 'CommandInfo'
+                    | YaYaml\ConvertTo-Yaml
+                break
+             }
+            default { $summary }
+        }
+
+    }
+}
+
+function Find-MintilsSpecialPath {
+    <#
+    .synopsis
+        Sugar that converts paths relative a base dir
+    .link
+        https://learn.microsoft.com/en-us/dotnet/api/system.environment.specialfolderoption
+    .link
+        https://learn.microsoft.com/en-us/dotnet/api/system.environment.getfolderpath
+    #>
+    [Alias('Mint.Find-SpecialPath')]
+    [OutputType( 'Mintils.SpecialPath.Item' )]
+    [CmdletBinding()]
+    param(
+        # [Alias('BasePath')]
+        # [Parameter(Mandatory, Position = 0)]
+        # $RelativeTo,
+
+        # # Strings / paths to convert
+        # [Alias('PSPath', 'FullName', 'InObj')]
+        # [Parameter(Mandatory, ValueFromPipelineByPropertyName, ValueFromPipeline)]
+        # [string[]] $Path,
+
+        # [ValidateSet('EnvVar', 'SpecialFolder')]
+        # [string[]] $Sources
+    )
+    process {
+        $specialFolderKeys = [enum]::GetValues( [System.Environment+SpecialFolder] )
+
+        foreach ($specialKey in $specialFolderKeys ) {
+            <#
+                > [enum]::GetNames( [System.Environment+SpecialFolderOption] ) -join ', '
+                # out: None, DoNotVerify, Create
+            #>
+            $resolveSpecial = [Environment]::GetFolderPath( <# SpecialFolder folder #> $specialKey )
+            # $resolveSpecial2 = [Environment]::GetFolderPath(
+            #     <# SpecialFolder folder #> $specialKey,
+            #     <# SpecialFolderOption option; Default: 'None' #> 'None'
+            # )
+            [pscustomobject]@{
+                PSTypeName = 'Mintils.SpecialPath.Item'
+                Name       = $specialKey
+                Exists     = Test-Path $resolveSpecial
+                Type       = 'SpecialFolder'
+                Path       = $ResolveSpecial
+            }
+        }
+        $envVarPaths = @( Get-ChildItem env: | Where-Object { Test-Path $_.Value } )
+
+        foreach ( $item in $EnvVarPaths ) {
+            [pscustomobject]@{
+                PSTypeName = 'Mintils.SpecialPath.Item'
+                Name       = $item.Name
+                Exists     = Test-Path $Item.Value
+                Type       = 'EnvVar'
+                Path       = $item.Value
+            }
+        }
+    }
+
+}
 
 # was: requires -Module ClassExplorer
 
@@ -88,8 +238,6 @@ function Find-MintilsTypeName {
     }
 }
 
-
-
 function Format-MintilsRelativePath {
     <#
     .synopsis
@@ -113,7 +261,6 @@ function Format-MintilsRelativePath {
         [switch] $AsObject
     )
     process {
-
         foreach( $item in $Path ) {
             $relPath = [System.IO.Path]::GetRelativePath(
                 <# string: relativeTo #> $RelativeTo,
@@ -136,8 +283,6 @@ function Format-MintilsRelativePath {
     }
 
 }
-
-
 
 
 
@@ -211,6 +356,4 @@ function Get-MintilsTypeHelp {
         return $Info
     }
 }
-
-
 
