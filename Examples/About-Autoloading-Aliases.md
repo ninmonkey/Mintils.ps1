@@ -4,7 +4,7 @@ When will commands and aliases auto import the module?
 
 You can **opt-in** to having aggressive aliases. 
 
-See [Enable-DefaultAlias](../test/EnableDefaultAlias.tests.ps1)
+See [Enable-DefaultAlias](../Tests/Public/Enable-DefaultAlias.tests.ps1)
 
 
 ### [1] Full command Names will auto-import the module
