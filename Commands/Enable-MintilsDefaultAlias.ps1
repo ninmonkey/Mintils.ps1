@@ -34,9 +34,15 @@
 
         # aggressive aliases include aliases that don't have a prefix of 'mint'
         Set-Alias @splat -Name 'RelPath' -Value 'Mintils\Format-MintilsRelativePath'
-        Set-Alias @splat -Name 'Goto' -Value 'Mintils\Push-MintilsLocation'
-        Set-Alias @splat -Name 'Some' -Value 'Mintils\Select-MintilsObject'
-        Set-Alias @splat -Name 'One'  -Value 'Mintils\Select-MintilsObject'
+        Set-Alias @splat -Name 'Goto'    -Value 'Mintils\Push-MintilsLocation'
+        Set-Alias @splat -Name 'Some'    -Value 'Mintils\Select-MintilsObject'
+        Set-Alias @splat -Name 'One'     -Value 'Mintils\Select-MintilsObject'
+
+        <#
+            # maybe?
+            Set-Alias @splat -Name 'Mint.Fcc' -Value 'Mintils\Format-MintilsShow'
+            Set-Alias @splat -Name 'fcc'      -Value 'Mintils\Format-MintilsShow'
+        #>
 
     )   | Sort-Object
         | Join-String -f "`n - {0}" -op 'Mintils Set-Alias: ' -p {
