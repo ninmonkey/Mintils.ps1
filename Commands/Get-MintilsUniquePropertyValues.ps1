@@ -9,7 +9,7 @@
     .EXAMPLE
         Get-Alias   | Mint.Get-UniquePropValues -Name Source
     #>
-    [Alias('Mint.Get-UniquePropValue')]
+    [Alias( 'Mint.Get-UniquePropValue', 'Get-MintilsUniquePropertyValues' )]
     [OutputType( [string[]] )]
     [CmdletBinding()]
     param(
