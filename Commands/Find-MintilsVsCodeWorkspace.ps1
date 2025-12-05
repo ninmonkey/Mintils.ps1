@@ -1,7 +1,7 @@
-﻿function Find-MintilsGitRepository {
+﻿function Find-MintilsVsCodeWorkspace {
     <#
     .synopsis
-        Fast find git repository folders. uses 'fd' find for speed'
+        Fast find vscode workspaces using 'fd' find for speed
     .NOTES
     the original command was:
         fd -d8 -td '\.git' -H | Get-Item -Force | % Parent
@@ -10,23 +10,23 @@
     else, fallback to
         gci .. -Recurse -Directory '.git' -Hidden | split-path | gi
 
-    clean: #: refactor by calling wrapper: 'Invoke-FdFind'
+    clean: #29: refactor by calling wrapper: 'Invoke-FdFind'
     .EXAMPLE
         # Search current dir
-        > Mint.Find-GitRepo
+        > Mint.Find-VsCodeWorkspace
     .EXAMPLE
         # Search other dir
-        > Mint.Find-GitRepo -BaseDirectory 'h:\data\2025'
+        > Mint.Find-VsCodeWorkspace -BaseDirectory 'h:\data\2025'
     .link
         Mintils\Find-MintilsWorkspace
     .link
         Mintils\Find-MintilsGitRepository
     #>
     [Alias(
-        'Mint.Find-GitRepository',
-        'Mint.Find-GitRepo'
+        'Mint.Find-VsCodeWorkspace',
+        'Mint.Find-CodeWorkspace'
     )]
-    [OutputType( [System.IO.DirectoryInfo] )]
+    [OutputType( [System.IO.FileInfo] )]
     [CmdletBinding()]
     param(
         # Base directory to search from, else current.
@@ -42,13 +42,10 @@
     begin {}
     process {}
     end {
-        $rootDir = Get-Item -ea stop $baseDirectory
-        $pattern = '^\.git$'
-        "Depth: ${MaxDepth}, Pattern: ${pattern}, Root: ${RootDir}" | Write-Verbose
+        $rootDir = Get-Item -ea 'stop' $BaseDirectory
+        "Depth: ${MaxDepth}, Extension: 'code-workspace', Root: ${RootDir}" | Write-Verbose
         $pathSeparator = '/'
-
-        fd --max-depth $MaxDepth --type 'directory' $Pattern --hidden --absolute-path --path-separator $pathSeparator --base-directory $rootDir
-            | Get-Item -Force -ea Continue
-            | % Parent
+        fd --max-depth 7 --type 'file' -e 'code-workspace' --absolute-path --path-separator $pathSeparator --base-directory $rootDir
+            | Get-Item -ea 'continue'
     }
 }
