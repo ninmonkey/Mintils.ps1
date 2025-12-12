@@ -26,7 +26,7 @@
         'Mint.Find-GitRepository',
         'Mint.Find-GitRepo'
     )]
-    [OutputType( [System.IO.DirectoryInfo] )]
+    # [OutputType( [System.IO.DirectoryInfo], # for default set , 'mintils.git.repository.record' # for -PassThru )]
     [CmdletBinding()]
     param(
         # Base directory to search from, else current.
@@ -37,18 +37,49 @@
 
         # for: fd --max-depth <int>
         [Alias('Depth')]
-        [int] $MaxDepth = 5
+        [int] $MaxDepth = 5,
+
+        # return an object instead of folder
+        [switch] $PassThru
     )
     begin {}
     process {}
     end {
         $rootDir = Get-Item -ea stop $baseDirectory
         $pattern = '^\.git$'
-        "Depth: ${MaxDepth}, Pattern: ${pattern}, Root: ${RootDir}" | Write-Verbose
+        "Depth: ${MaxDepth}, Pattern: ${pattern}, Root: ${RootDi
+        r}" | Write-Verbose
         $pathSeparator = '/'
 
-        fd --max-depth $MaxDepth --type 'directory' $Pattern --hidden --absolute-path --path-separator $pathSeparator --base-directory $rootDir
-            | Get-Item -Force -ea Continue
-            | % Parent
+        $found = @( fd --max-depth $MaxDepth --type 'directory' $Pattern --hidden --absolute-path --path-separator $pathSeparator --base-directory $rootDir )
+
+        $found = @( $found | Get-Item -ea 'continue' -force | % Parent )
+
+
+        if( ! $PassThru ) { return $found }
+
+        $binGit = gcm -CommandType Application 'git' -ea 'stop' -TotalCount 1
+        foreach($item in $found) {
+            $curRepo = Get-Item $Item
+            # pushd $curRepo
+            try {
+
+                $urlOrigin = & $binGit -C $curRepo remote get-url origin
+                $urlOrigin = $urlOrigin -replace '(\.git)$', ''
+                # $urlOrigin = git -C $curRepo remote get-url origin
+            } catch {
+                $urlOrigin = ''
+            }
+
+            $info = [ordered]@{
+                PSTypeName = 'mintils.git.repository.record'
+                Name       = $curRepo.Name
+                RepoUrl    = $urlOrigin
+                FullName   = $curRepo
+                # | Get-Item -Force -ea Continue
+                # | % Parent
+            }
+            [pscustomobject] $info
+        }
     }
 }
