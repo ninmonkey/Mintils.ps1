@@ -34,9 +34,15 @@ function Enable-MintilsDefaultAlias {
 
         # aggressive aliases include aliases that don't have a prefix of 'mint'
         Set-Alias @splat -Name 'RelPath' -Value 'Mintils\Format-MintilsRelativePath'
-        Set-Alias @splat -Name 'Goto' -Value 'Mintils\Push-MintilsLocation'
-        Set-Alias @splat -Name 'Some' -Value 'Mintils\Select-MintilsObject'
-        Set-Alias @splat -Name 'One'  -Value 'Mintils\Select-MintilsObject'
+        Set-Alias @splat -Name 'Goto'    -Value 'Mintils\Push-MintilsLocation'
+        Set-Alias @splat -Name 'Some'    -Value 'Mintils\Select-MintilsObject'
+        Set-Alias @splat -Name 'One'     -Value 'Mintils\Select-MintilsObject'
+
+        <#
+            # maybe?
+            Set-Alias @splat -Name 'Mint.Fcc' -Value 'Mintils\Format-MintilsShow'
+            Set-Alias @splat -Name 'fcc'      -Value 'Mintils\Format-MintilsShow'
+        #>
 
     )   | Sort-Object
         | Join-String -f "`n - {0}" -op 'Mintils Set-Alias: ' -p {
@@ -215,6 +221,92 @@ function Find-MintilsFunctionDefinition {
     }
 }
 
+function Find-MintilsGitRepository {
+    <#
+    .synopsis
+        Fast find git repository folders. uses 'fd' find for speed'
+    .NOTES
+    the original command was:
+        fd -d8 -td '\.git' -H | Get-Item -Force | % Parent
+        fd -d3 -td '\.git' -H --absolute-path --base-directory 'H:\data\2025' | Get-Item -Force
+
+    else, fallback to
+        gci .. -Recurse -Directory '.git' -Hidden | split-path | gi
+
+    clean: #: refactor by calling wrapper: 'Invoke-FdFind'
+    .EXAMPLE
+        # Search current dir
+        > Mint.Find-GitRepo
+    .EXAMPLE
+        # Search other dir
+        > Mint.Find-GitRepo -BaseDirectory 'h:\data\2025'
+    .link
+        Mintils\Find-MintilsWorkspace
+    .link
+        Mintils\Find-MintilsGitRepository
+    #>
+    [Alias(
+        'Mint.Find-GitRepository',
+        'Mint.Find-GitRepo'
+    )]
+    # [OutputType( [System.IO.DirectoryInfo], # for default set , 'mintils.git.repository.record' # for -PassThru )]
+    [CmdletBinding()]
+    param(
+        # Base directory to search from, else current.
+        # for: fd --base-directory
+        [Parameter()]
+        [Alias('Name', 'RootDir' )]
+        [string] $BaseDirectory = '.',
+
+        # for: fd --max-depth <int>
+        [Alias('Depth')]
+        [int] $MaxDepth = 5,
+
+        # return an object instead of folder
+        [switch] $PassThru
+    )
+    begin {}
+    process {}
+    end {
+        $rootDir = Get-Item -ea stop $baseDirectory
+        $pattern = '^\.git$'
+        "Depth: ${MaxDepth}, Pattern: ${pattern}, Root: ${RootDi
+        r}" | Write-Verbose
+        $pathSeparator = '/'
+
+        $found = @( fd --max-depth $MaxDepth --type 'directory' $Pattern --hidden --absolute-path --path-separator $pathSeparator --base-directory $rootDir )
+
+        $found = @( $found | Get-Item -ea 'continue' -force | % Parent )
+
+
+        if( ! $PassThru ) { return $found }
+
+        $binGit = gcm -CommandType Application 'git' -ea 'stop' -TotalCount 1
+        foreach($item in $found) {
+            $curRepo = Get-Item $Item
+            # pushd $curRepo
+            try {
+
+                $urlOrigin = & $binGit -C $curRepo remote get-url origin
+                $urlOrigin = $urlOrigin -replace '(\.git)$', ''
+                # $urlOrigin = git -C $curRepo remote get-url origin
+            } catch {
+                $urlOrigin = ''
+            }
+
+            $info = [ordered]@{
+                PSTypeName = 'mintils.git.repository.record'
+                Name       = $curRepo.Name
+                RepoUrl    = $urlOrigin
+                FullName   = $curRepo
+                # | Get-Item -Force -ea Continue
+                # | % Parent
+            }
+            [pscustomobject] $info
+        }
+    }
+}
+
 function Find-MintilsSpecialPath {
     <#
     .synopsis
@@ -322,6 +414,195 @@ function Find-MintilsTypeName {
     }
 }
 
+function Find-MintilsVsCodeWorkspace {
+    <#
+    .synopsis
+        Fast find vscode workspaces using 'fd' find for speed
+    .NOTES
+    the original command was:
+        fd -d8 -td '\.git' -H | Get-Item -Force | % Parent
+        fd -d3 -td '\.git' -H --absolute-path --base-directory 'H:\data\2025' | Get-Item -Force
+
+    else, fallback to
+        gci .. -Recurse -Directory '.git' -Hidden | split-path | gi
+
+    clean: #29: refactor by calling wrapper: 'Invoke-FdFind'
+    .EXAMPLE
+        # Search current dir
+        > Mint.Find-VsCodeWorkspace
+    .EXAMPLE
+        # Search other dir
+        > Mint.Find-VsCodeWorkspace -BaseDirectory 'h:\data\2025'
+    .link
+        Mintils\Find-MintilsWorkspace
+    .link
+        Mintils\Find-MintilsGitRepository
+    #>
+    [Alias(
+        'Mint.Find-VsCodeWorkspace',
+        'Mint.Find-CodeWorkspace'
+    )]
+    [OutputType( [System.IO.FileInfo] )]
+    [CmdletBinding()]
+    param(
+        # Base directory to search from, else current.
+        # for: fd --base-directory
+        [Parameter()]
+        [Alias('Name', 'RootDir' )]
+        [string] $BaseDirectory = '.',
+
+        # for: fd --max-depth <int>
+        [Alias('Depth')]
+        [int] $MaxDepth = 5
+    )
+    begin {}
+    process {}
+    end {
+        $rootDir = Get-Item -ea 'stop' $BaseDirectory
+        "Depth: ${MaxDepth}, Extension: 'code-workspace', Root: ${RootDir}" | Write-Verbose
+        $pathSeparator = '/'
+        fd --max-depth 7 --type 'file' -e 'code-workspace' --absolute-path --path-separator $pathSeparator --base-directory $rootDir
+            | Get-Item -ea 'continue'
+    }
+}
+
+function Format-MintilsConsoleFileUri {
+    <#
+    .synopsis
+        Converts paths into a console clickable file uris ( Try ctrl+LMB )
+    .description
+        Writes filepath to terminal using escape sequances for clickable filepath uris
+
+        renders as relativepath, but resolves as full path
+
+        example output:
+            ␛]8;;c:\temp\readme.md␛\readme.md␛]8;;␛\
+
+        an OSC Sequence starts with:
+            '␛]'
+        and ends with
+            '␛\'
+    .notes
+        Check how support varies using the '␇' vs '␛\' syntax
+    .example
+        # If you have 'c:\pwsh\examples\example.ps1'
+
+        > pushd 'c:\pwsh\examples'
+        > Mint.Format-ConsoleFileUri -InObj ( gci . *.ps1 )
+            # out: 'example.ps1'
+
+        > Mint.Format-ConsoleFileUri -InObj ( gci . *.ps1 ) -RelativeTo (gi ..)
+            # out: 'examples\example.ps1'
+    .example
+        > Mint.Format-ConsoleHyperlink -Name 'readme' -Uri ([uri] 'c:\temp\readme.md' ) | Mint.Format-ControlSymbols
+        # out:
+
+            ␛]8;;file:///c:/temp/readme.md␇readme␛]8;;␇
+    .example
+        > $relPath = [IO.Path]::GetRelativePath( ( Join-path $file.Directory '..'),  $file.FullName )
+        > Mint.Format-ConsoleHyperlink -Name $relPath -Uri $File.FullName
+
+            readme.md
+
+        > Mint.Format-ConsoleHyperlink -name 'readme' -Uri 'c:\foo\readme.md' | Mint.Format-ControlChars
+
+            ␛]8;;c:\foo\readme.md␇readme␛]8;;␇
+
+        > Mint.Format-ConsoleHyperlink -Name $relPath -Uri $File.FullName | Mint.Format-ControlChars
+   .link
+        Mintils\Format-MintilsConsoleHyperlink
+   .link
+        Mintils\Format-MintilsConsoleFileUri
+    .link
+        Pansies\New-Hyperlink
+    .link
+        https://en.wikipedia.org/wiki/ANSI_escape_code
+    #>
+    [Alias('Mint.Format-ConsoleFileUri', 'Mint.ConsoleFileUri')]
+    [OutputType( [string] )]
+    [CmdletBinding()]
+    param(
+        [Alias('BasePath')]
+        [Parameter(Position = 0)]
+        $RelativeTo = '.',
+
+        # Strings / paths to convert
+        [Alias('PSPath', 'FullName', 'InObj')]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName, ValueFromPipeline)]
+        [string[]] $Path
+    )
+    begin {
+        $relativeRoot = Get-Item -ea 'stop' $RelativeTo
+    }
+    process {
+        foreach( $item in $Path ) {
+            $item = Get-Item $item -ea 'stop'
+            $relPath = [IO.Path]::GetRelativePath( <# relativeTo #> $relativeRoot, <# path #> $item.FullName )
+            [uri] $uri = $item.FullName
+
+            # original gist had used: "`e]8;;${uri}`e\${relPath}`e]8;;`e\"
+            Format-MintilsConsoleHyperlink -InputObject $relPath -Uri $Uri
+        }
+    }
+}
+
+function Format-MintilsConsoleHyperlink {
+   <#
+   .synopsis
+        A more generic Format-MintilsConsoleFileUri, without requiring it to be a filepath
+    .notes
+
+    .example
+        > Mint.Format-ConsoleHyperlink -Name 'offset' -Uri 'https://dax.guide/offset/'
+    .example
+        > $file = Get-Item 'readme.md'
+        > Mint.Format-ConsoleHyperlink -Name $file.Name -Uri ([Uri] $File.FullName )
+            # 'readme.md' but LMB opens the full path
+    .example
+        > $relPath = [IO.Path]::GetRelativePath(
+            ( Join-path $file.Directory '..'), $file.FullName )
+
+        > Mint.Format-ConsoleHyperlink -Name $relPath -Uri ([Uri] $File.FullName )
+            # 'parentDir\readme.md' that opens full path on click
+    .example
+        # Open page in your web browser
+        > Mint.Format-ConsoleHyperlink -Name 'docs: Offset()' -Uri 'https://dax.guide/offset/'
+
+        # Open windows control panel
+        > Mint.Format-ConsoleHyperlink -Name 'control panel: sound' -Uri 'ms-settings:sound'
+        > Pansies\New-Hyperlink 'control panel for sound' -Uri 'ms-settings:sound'
+    .example
+        > Mint.Format-ConsoleHyperlink -Name 'control panel: sound' -Uri 'ms-settings:sound' | Mint.ShowControlChars
+
+            ␛]8;;ms-settings:sound␇control panel: sound␛]8;;␇
+    .link
+        https://gist.github.com/Jaykul/f46590c0f726dd6a4424ffa614ed1545
+    .link
+        Pansies\New-Hyperlink
+    .link
+        Mintils\Format-MintilsConsoleFileUri
+    .link
+        Mintils\Format-MintilsConsoleHyperlink
+    .link
+        https://github.com/PoshCode/Pansies/blob/main/Docs/New-Hyperlink.md
+   #>
+    [Alias( 'Mint.Format-ConsoleHyperlink', 'Mint.ConsoleHyperlink')]
+    [CmdletBinding()]
+    param(
+        # The Uri the hyperlink should point to
+        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [string] $Uri,
+
+        # The text of the hyperlink (if not specified, defaults to the URI)
+        [ValidateNotNullOrEmpty()]
+        [Alias('Text', 'Name' )]
+        [Parameter(ValueFromRemainingArguments)]
+        [String] $InputObject = $Uri
+    )
+    $8 = [char] 27 + "]8;;"
+    "${8}{0}`a{1}${8}`a" -f ( $Uri, $InputObject )
+}
+
 function Format-MintilsRelativePath {
     <#
     .synopsis
@@ -366,6 +647,87 @@ function Format-MintilsRelativePath {
         }
     }
 
+}
+
+
+function Format-MintilsShowControlSymbols {
+    <#
+   .synopsis
+        Replace ansi escape sequences with safe-to-print control char symbols
+    .notes
+        Basically map any c0 value by adding 0x2400 to the codepoint: https://www.compart.com/en/unicode/block/U+2400
+
+    .example
+        # Inspect what strings pansies/PSStyle are generating safely, by replacing control sequences
+
+        > Pansies\New-text -fg Magenta4 'hi world' | Mint.Format-ControlChars
+        > Pansies\New-text -fg Magenta4 'hi world' -bg (Get-Complement 'magenta4') | Mint.Format-ControlChars
+
+            ␛[38;2;139;0;139mhi world␛[39m
+            ␛[48;2;0;139;0m␛[38;2;139;0;139mhi world␛[49m␛[39m
+    .example
+        # 24/n bit syntax
+
+        > [PoshCode.Pansies.RgbColor]::ColorMode = 'ConsoleColor'
+        > New-Text -fg 'blue' -Object 'foo' | Mint.Format-ControlChars
+
+        > [PoshCode.Pansies.RgbColor]::ColorMode = 'Rgb24Bit'
+        > New-Text -fg 'blue' -Object 'foo' | Mint.Format-ControlChars
+
+            ␛[94mfoo␛[39m
+            ␛[38;2;0;0;255mfoo␛[39m
+    .example
+        > Mint.Format-ConsoleHyperlink -Name 'offset' -Uri 'https://dax.guide/offset/'
+    .example
+        > $file = Get-Item 'readme.md'
+        > Mint.Format-ConsoleHyperlink -Name $file.Name -Uri ([Uri] $File.FullName )
+            # 'readme.md' but LMB opens the full path
+    .example
+        > $relPath = [IO.Path]::GetRelativePath(
+            ( Join-path $file.Directory '..'), $file.FullName )
+
+        > Mint.Format-ConsoleHyperlink -Name $relPath -Uri ([Uri] $File.FullName )
+            # 'parentDir\readme.md' that opens full path on click
+    .example
+        # Open page in your web browser
+        > Mint.Format-ConsoleHyperlink -Name 'docs: Offset()' -Uri 'https://dax.guide/offset/'
+
+        # Open windows control panel
+        > Mint.Format-ConsoleHyperlink -Name 'control panel: sound' -Uri 'ms-settings:sound'
+        > Pansies\New-Hyperlink 'control panel for sound' -Uri 'ms-settings:sound'
+    .link
+        https://gist.github.com/Jaykul/f46590c0f726dd6a4424ffa614ed1545
+    .link
+        Pansies\New-Hyperlink
+    .link
+        Mintils\Format-MintilsConsoleFileUri
+    .link
+        Mintils\Format-MintilsConsoleHyperlink
+    .link
+        https://github.com/PoshCode/Pansies/blob/main/Docs/New-Hyperlink.md
+   #>
+    [Alias(
+        'Mint.Format-ControlSymbols',
+        'Mint.Format-ControlChars',
+        'Mint.ShowControlChars'
+    )]
+    [CmdletBinding()]
+    param(
+        [Alias('Content', 'Text')]
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [string[]] $InputText
+    )
+    process {
+        # I'm assuming this isn't super performant, but it's good enough for smallish strings
+        foreach ( $line in $InputText) {
+            ($line).ToString()?.EnumerateRunes() | ForEach-Object {
+                if ( $_.Value -le 0x1f ) {
+                    [Text.Rune]::new( $_.Value + 0x2400 )
+                }
+                else { $_ }
+            } | Join-String -sep ''
+        }
+    }
 }
 
 function Get-MintilsCodepoint {
@@ -436,6 +798,41 @@ function Get-MintilsCodepoint {
     }
     process {
         foreach( $line in $TextContent ) { _Get-RuneInfo -Text $line }
+    }
+}
+
+function Get-MintilsTypeFormatData {
+    <#
+    .synopsis
+        Get TypeData and Formatdata with some sugar
+    .NOTES
+    .EXAMPLE
+    #>
+    [Alias(
+        'Mint.Get-TypeFormatData'
+    )]
+    # [OutputType( [System.IO.FileInfo] )]
+    [CmdletBinding()]
+    param(
+        # type, or object to get the type of
+        [Parameter(Mandatory)]
+        [Alias('Name', 'Type', 'InObj' )]
+        [object] $InputType
+    )
+    begin {}
+    process {}
+    end {
+        $name  = $InputType -is [string] ? $InputType : $InputType.GetType()
+        $fdata = Get-FormatData -TypeName $name
+        $tdata = Get-TypeData -TypeName $name
+
+        "Query: $name" | Write-Verbose
+        $data = [ordered]@{
+            PSTypeName = 'Mintils.TypeAndFormatData.Info'
+            FormatData = $fdata
+            TypeData   = $tdata
+        }
+        [pscustomobject]$data
     }
 }
 
@@ -589,38 +986,531 @@ function Get-MintilsUnicodeRange {
     }
 }
 
+function Get-MintilsUniquePropertyValue {
+    <#
+    .synopsis
+        From a list of objects: Get the Unique list of all values for a property name
+    .DESCRIPTION
+        Output is case-sensitive
+    .EXAMPLE
+        Get-Command | Mint.Get-UniquePropValues -Name Source
+    .EXAMPLE
+        Get-Alias   | Mint.Get-UniquePropValues -Name Source
+    #>
+    [Alias( 'Mint.Get-UniquePropValue', 'Get-MintilsUniquePropertyValues' )]
+    [OutputType( [string[]] )]
+    [CmdletBinding()]
+    param(
+        # Which property to inspect
+        [Alias('Name')]
+        [Parameter(Mandatory)]
+        [string] $PropertyName,
+
+        # objects to inspect
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [object[]] $InputObject,
+
+        # Keep or ignore a [String]::Empty
+        [switch] $KeepEmptyValue = $true,
+
+        # keep or ignore whitespace-only strings
+        [switch] $KeepWhitespaceOnlyValue,
+
+        # The default mode will sort. You can choose to preserve the order each was visited
+        [Alias('NoSort')]
+        [switch] $WithoutSort,
+
+        # uses casesenstive compare by default
+        [Alias('UsingCaseInsensitive')]
+        [ValidateScript({throw 'nyi'})]
+        [switch]$CaseInsensitive
+    )
+    begin {
+        [Collections.Generic.HashSet[string]] $hset = @()
+
+        # [Collections.Generic.List[Object]] $Items = @() # allow sort-object unique on object types ?? or just strings
+    }
+    process {
+        foreach($Obj in $InputObject) {
+            $value = $Obj.$Propertyname
+            if( $Null -eq $Value ) { continue }
+            $isEmptyStr = [string]::Empty -eq $value
+
+            if( $isEmptyStr -and $KeepEmptyValue ) {
+                $null = $hset.Add( $value )
+                continue
+            }
+            if(
+                -not $isEmptyStr -and
+                     $KeepWhitespaceOnlyValue -and
+                     [string]::IsNullOrWhiteSpace( $value )
+            ) {
+                $null = $hset.Add( $value )
+                continue
+            }
+            $null = $hset.Add( $value )
+            # if( -not $KeepEmptyValue          -and [string]::IsNullOrEmpty( $value ) )      { continue }
+            # if( -not $KeepWhitespaceOnlyValue -and [string]::IsNullOrWhiteSpace( $value ) ) { continue }
+
+            # $null = $hset.Add( $value )
+        }
+    }
+    end {
+        if( $WithoutSort ) { return $hset }
+        $hset | Sort-Object
+    }
+}
+
+function Get-MintilsVariableSummary {
+    <#
+    .SYNOPSIS
+        summarize a list of names, without visible errors
+    .EXAMPLE
+        Pwsh> mint.Get-VariableSummary -HasPrefix 'PS'
+    .EXAMPLE
+        Pwsh> mint.Get-VariableSummary -HasPrefix host -HasSuffix 'preference'
+    .EXAMPLE
+        Pwsh> mint.Get-VariableSummary -PartialNames style
+    .EXAMPLE
+        Pwsh> mint.Get-VariableSummary -BeginsWith '_'  -PartialNames 'editorservices', 'vscode'
+    #>
+    [CmdletBinding()]
+    [Alias('mint.Get-VariableSummary')]
+    [OutputType( 'Mintils.Variable.Summary' )]
+    param(
+        # exact match
+        [ArgumentCompletions(
+            'GitLogger', 'Logs', 'CurMetric' )]
+        [string[]] $ExactNames, # ( 'curMetric', 'logs', 'GitLogger' ),
+
+        # wildcard match
+        [ArgumentCompletions(
+            'Git', 'GitLogger', '__', 'PS' )]
+        [string[]] $PartialNames,
+
+        # wildcard prefix at the start, ex: 'dunder'
+        [Alias('BeginsWith')]
+        [ArgumentCompletions(
+            '__', 'PS' )]
+        [string[]] $HasPrefix,
+
+        # wildcard prefix # dunder?
+        [Alias('EndsWith')]
+        [ArgumentCompletions(
+            'preference', 'culture', 'Parameters' )]
+        [string[]] $HasSuffix,
+
+        # By name or depth as [int]. Or implicit default.
+        [ArgumentCompletions(
+            'script', 'global', 0, 1, 2, 3, 4, 5
+        )]
+        [string] $Scope,
+
+        # Future: Instead of scope 0, you can say -FromTop 0 to get the top most
+        # scope. ( cmdlet handles iterating each until an exception is thrown. silently for you.)
+        [ValidateScript({throw 'nyi: Relative offset for scope fromTop'})]
+        [ArgumentCompletions( 0, 1, 2, 3)]
+        [uint] $DepthFromTop,
+
+        [Alias('DebugQuery')]
+        [switch] $ShowQuery
+    )
+
+    [System.Collections.Generic.List[Object]] $names = @()
+    $getVars = @{
+        ErrorAction = 'ignore'
+    }
+
+    if( $MyInvocation.BoundParameters.ContainsKey('Scope') ) {
+        $getVars['Scope'] = $Scope
+    }
+    if( $MyInvocation.BoundParameters.ContainsKey('ExactNames') ) {
+        $names.addRange( @( $ExactNames ))
+    }
+    if( $MyInvocation.BoundParameters.ContainsKey('PartialNames') ) {
+        $names.addRange( @(
+            $PartialNames.forEach({ "*${_}*"  })
+        ))
+    }
+    if( $MyInvocation.BoundParameters.ContainsKey('HasPrefix') ) {
+        $names.addRange( @(
+            $HasPrefix.forEach({ "${_}*"  })
+        ))
+    }
+    if( $MyInvocation.BoundParameters.ContainsKey('HasSuffix') ) {
+        $names.addRange( @(
+            $HasSuffix.forEach({ "*${_}"  })
+        ))
+    }
+
+    if( $Names.count -gt 0 ) {
+        $getVars['Name'] = $names
+    }
+
+    if( $ShowQuery ) {
+        ( $getVars
+            | ConvertTo-Json -Depth 4 ) -split '\r?\n'
+            | Join-String -f "`n    {0}" -os "`n"
+            | Join-String -op "call Get-Variable => "
+            | Write-Host -fg $Color.InfoDark -bg 'gray25'
+    }
+
+    $found =
+        try {
+            Get-Variable -ea ignore @getVars # Test whether I must use stop to catch
+        } catch {
+            if($_.Exception.Message -match 'scope.*exceeds.*number' ) {
+                'Scope exceeds max depth: -Scope {0}' -f $getVars['Scope']
+                return
+            }
+            # the rest is unexpected
+            throw
+        }
+    if( $found.count -eq 0 ) {
+        '0 matches found!' | Write-Host -fg 'gray60'
+        return
+    }
+    $found <# todo: convert to a type data instead #>
+        | %{
+            $tinfo      = ( $_.Value)?.GetType()
+            $abbrName   = ($tinfo).Name
+            $abbrBounds = @(
+                if($_.Value -is [Array]) { 'IsArray' }
+                'Count: {0}' -f $_.Value.Count
+                'Len: {0}'   -f $_.Value.Length
+            ) -join ', '
+
+            [pscustomobject]@{
+                PSTypeName = 'Get-Variable.SummaryResult'
+                Name     = $_.Name
+                TypeAbbr = $abbrName   # ( $_.Value)?.GetType().Name
+                Bounds   = $abbrBounds
+                Instance = $_.Value
+            }
+        }
+        | Sort-Object -Property Name
+}
+
+function New-MintilsRegexOrExpression {
+   <#
+   .synopsis
+        Create a regex that combines a list into an OR. As patterns or as literals.
+    .example
+        > Mint.New-RegexOr -InputObject ('a'..'c' + 3.14 + 0..2 )
+            (a|b|c|3.14|0|1|2)
+
+        > Mint.New-RegexOr -InputObject ('a'..'c' + 3.14 + 0..2 ) -EscapeRegex
+            (a|b|c|3\.14|0|1|2)
+    .example
+    > '[3', 'z' | Mint.New-RegexOr
+    > '[3', 'z' | Mint.New-RegexOr -AsRegexLiteral
+        ([3|z)
+        (\[3|z)
+    .example
+    # Build a pattern for file extensions:
+    > gci . -Recurse -File
+        | % Extension | Sort-Object -Unique
+        | Mint.New-RegexOr -AsRegexLiteral -FullMatch
+
+    # out:
+        ^(\.json|\.pbip|\.pbir|\.pbism|\.pbix|\.ps1)$
+   #>
+    [Alias( 'Mint.New-RegexOr')]
+    [CmdletBinding()]
+    param(
+        [Alias('Pattern', 'Regex')]
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [string[]] $InputObject,
+
+        # Escape all patterns before joining them
+        [Alias('AsRegexLiteral', 'AsLiteral')]
+        [switch] $EscapeRegex,
+
+        # Only join the distinct list of values
+        [Alias('Distinct')]
+        [switch] $Unique,
+
+        # Default allows partial matches. This forces the full string to match the or codintion
+        [Parameter()]
+        [switch] $FullMatch
+    )
+    begin {
+        [Collections.Generic.List[string]] $segments = @()
+
+        $final_fstr = -not $FullMatch ? '({0})' : '^({0})$'
+    }
+    process {
+        $segments.AddRange( $InputObject )
+    }
+    end {
+
+        $segments
+            | Sort-Object -Unique
+            | Join-String -sep '|' -Prop {
+                $EscapeRegex ? ([Regex]::Escape( $_ )) : $_ }
+            | Join-String -f $final_fstr
+            # or for a full match
+
+        # foreach( $text in $Segments ) {
+        #     [regex]::Escape( $text )
+        # }
+        # if( $EscapeRegex ) {
+        # }
+        # if( $InputObject.count -gt 0 ) {
+        #     if( )
+        # }
+        # foreach( $item in $InputObject ) {
+        #     $EscapeRegex ? ([Regex]::Escape( $item )) : $Item
+        # }
+        # if($EscapeRegex) {
+
+        # }
+
+        # @(foreach( $item in $InputObject ) {
+        # $false ? ([Regex]::Escape( $item )) : $Item
+        # }) | Join-String -sep '|'
+        # | Join-String -f '^({0})$'
+
+        # $InputObject
+        # | Join-String -p {
+
+        # }
+
+    }
+}
+
+
+function New-MintilsSafeFilename {
+    <#
+    .SYNOPSIS
+        Generate a "safe" filename using a template with the current time. ( Default is to the level of seconds )
+    .NOTES
+        Uses universal sortable, aka: 'u'
+    .example
+        > mint.New-SafeFilename
+            # 2025-08-25_08-31-57Z
+
+        > mint.New-SafeFilename -TemplateString 'screenshot-{0}.png'
+            # screenshot-2025-08-25_08-31-57Z.png
+
+        > mint.New-SafeFilename '{0}-main.log'
+            # 2025-08-25_08-31-57Z-main.log
+
+        > mint.New-SafeFilename 'AutoExport-{0}.xlsx'
+            # AutoExport-2025-08-25_08-31-57Z.xlsx
+    .link
+        https://learn.microsoft.com/en-us/dotnet/standard/base-types/standard-date-and-time-format-strings#table-of-format-specifiers
+    #>
+    [Alias(
+        'Mint.New-SafeFilename' )]
+    [OutputType('System.String')]
+    [CmdletBinding()]
+    param(
+        # Set format string used by "-f" format
+        [Parameter(Position = 0)]
+        [ArgumentCompletions(
+            "'{0}.log'",
+            "'{0}'",
+            "'AutoExport-{0}.xlsx'",
+            "'main-{0}.log'",
+            "'{0}-main.log'",
+            "'screenshot-{0}.png'"
+        )]
+        [string] $TemplateString = '{0}',
+
+        [Alias('AsResolution')]
+        [ValidateSet( 'Seconds', 'Milliseconds', 'Nanoseconds', 'Microseconds' )]
+        [string] $Resolution = 'Seconds'
+    )
+    $fStr = switch( $Resolution ) {
+        'Seconds' { 'u' }
+        default { throw "Missing Template defintion for: ${Resolution}"}
+    }
+    $render = $TemplateString -f @(
+        [datetime]::Now.ToString( $fStr ) -replace '[ ]+', '_' -replace ':', '-' )
+
+    "Generated: '${render}' from template: ${TemplateString}" | Write-Verbose
+    $render
+}
+
+function Quick-MintilsFilterByPropertyValue {
+    <#
+    .synopsis
+        Takes a list of objects, prompts user with Fzf to select distinct values in that column, then filters to require those items
+    .description
+        Saves
+            selected values to:      $LastMintFzfProps
+            results after filtering: $LastMintFzf
+    .EXAMPLE
+        > Get-Alias | Mint.Quick-FilterByProperty -PropertyName Source
+    .EXAMPLE
+        > Find-Type | Mint.Quick-FilterByProperty Namespace
+    #>
+    [Alias('Mint.Quick-FilterByProperty')]
+    # [OutputType( )]
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, Position = 0 )]
+        [Alias('Name')]
+        [string] $PropertyName,
+
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [object[]] $InputObject,
+
+        [switch] $KeepEmptyValue,
+        [switch] $KeepWhitespaceOnlyValue
+    )
+    begin {
+        [Collections.Generic.List[Object]] $items = @()
+    }
+    process {
+        foreach( $Obj in $InputOBject ) {
+            $items.Add( $Obj )
+        }
+    }
+    end {
+        $lastUniquePropValues = @(
+            $Items
+            # $GetAlias
+                | Mint.Get-UniquePropValue -Name $PropertyName -KeepEmptyValue:$( $KeepEmptyValue ) -KeepWhitespaceOnlyValue:$( $KeepWhitespaceOnlyValue )
+        )
+
+        # todo: clean: Should use Invoke-Fzf/Select instead of hard coded
+        $lastFzfProps = $lastUniquePropValues
+            | fzf -m <# --tac #> --cycle <# --footer foot #> --layout=reverse --header "Property '${PropertyName}' Values to keep: " --header-first --input-border rounded  --gap=1 --gap-line="$(New-Text '-' -fg gray30)"
+            # extra params '--no-input' ; and no escap[e for exit]
+
+
+        $found = $Items | ? $Propertyname -in @( $lastFzfProps )
+        $found
+
+        if( $true ) {
+            $global:LastMintFzfProps = $LastFzfProps
+            $global:LastMintFzf      = $found
+
+            $lastFzfProps
+                | Join-String -sep ', ' -op '$LastMintFzf = '
+                | Write-Host -fg 'gray60' -bg 'gray30'
+
+            $found.count
+                | Join-String "`$Found = {0} items"
+                | Write-Host -f 'goldenrod' -bg 'gray20'
+        }
+    }
+}
+
 function Select-MintilsObject {
     <#
     .synopsis
         Select first, last, some, etc...
+    .EXAMPLE
+        # when you want a few items
+        > Get-Module | Mint.One            # first only
+        > Get-Module | Mint.Select-Some    # up to 5
+        > Get-Module | Mint.Select-Some 20 # up to 20
+    .example
+        > 'a'..'f' | Mint.Select-Random -Shuffle | Mint.One
+    .example
+        # optional: enable aggressive aliases
+        > Mint.Enable-DefaultAlias
+
+        # like
+        > Get-Process | One
+        > Get-Process | Some # returns 5
+
+        > Get-Module | One
+    .link
+        Mintils\Select-MintilsRandomObject
+    .link
+        Mintils\Mint.Some
+    .link
+        Mintils\Mint.One
+    .link
+        Mintils\Mint.Select-Random
     #>
-    [Alias('Mint.Select-Some')]
+    [Alias('Mint.Select-Some', 'Mint.One', 'Mint.First' )]
     # [OutputType( [string], 'Mintils.RelativePath' )]
     [CmdletBinding()]
     param(
         # future: steppable pipeline for speed
-        [Alias('PSPath', 'FullName', 'InObj')]
+        [Alias('InObj', 'Obj')]
         [Parameter(Mandatory, ValueFromPipelineByPropertyName, ValueFromPipeline)]
         [object[]] $InputObject,
 
+        [Parameter( Position = 0)]
         [int] $MaxCount = 5
     )
     begin {
         $found_count = 0
-        $PSCmdlet.MyInvocation.MyCommand.Name | Write-Debug
-        write-warning 'WIP: Not executing as expected for smart alias! 🐘'
-        if( $PSCmdlet.MyInvocation.MyCommand.Name -in @('one', 'first' ) ) {
-            $found_count = 1
+        if( $PSCmdlet.MyInvocation.InvocationName -in ('One', 'First', 'Mint.One', 'Mint.First' ) ) {
+            $MaxCount = 1
         }
-        # wait-debugger
-        # if( $PSCmdlet.MyInvocation. )
     }
     process {
-        foreach( $Item in $InputOBject ) {
+        foreach( $Item in $InputObject ) {
             if( $found_count -ge $MaxCount ) { continue }
             $found_count += 1
             $InputObject
         }
+    }
+}
+
+function Select-MintilsRandomObject {
+    <#
+    .synopsis
+        Select first, last, some, etc...
+    .example
+        > $ps ??= Get-Process
+        > $ps | Mint.Select-Random # 5
+        > $ps | Mint.Select-Random 2 # 2
+        > $ps | Mint.Select-Random -SetSeed 3 # set seed for a fixed-random value
+
+    .example
+        > 'a'..'f' | Mint.Select-Random -Shuffle
+        > 'a'..'f' | Mint.Select-Random -Shuffle -SetSeed 4
+    .link
+        Microsoft.PowerShell.Utility\Get-Random
+    #>
+    [Alias('Mint.Select-Random')]
+    # [OutputType( [string], 'Mintils.RelativePath' )]
+    [CmdletBinding()]
+    param(
+        # future: steppable pipeline
+        [Alias('InObj', 'Obj')]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName, ValueFromPipeline)]
+        [object[]] $InputObject,
+
+        [Parameter( Position = 0)]
+        [int] $MaxCount = 5,
+
+        # for: Get-Random -Shuffle
+        [switch] $Shuffle,
+
+        # for: Get-Random -SetSeed
+        [int] $SetSeed
+    )
+    begin {
+        [Collections.Generic.List[Object]] $items = @()
+        # $found_count = 0
+        # if( $PSCmdlet.MyInvocation.InvocationName -in ('Mint.RandomOne' ) ) {
+        #     $MaxCount = 1
+        # }
+    }
+    process {
+        $items.AddRange( [object[]] $InputObject )
+    }
+    end {
+        $splat = @{
+            InputObject = $Items
+            Count = $MaxCount
+        }
+        if( $Shuffle ) { # can't use -Shuffle and -Count at the same time
+            $splat.Shuffle = $Shuffle
+            $splat.Remove( 'Count' )
+        }
+
+        if( $setSeed ) { $splat.SetSeed = $setSeed }
+        Get-Random @splat # -InputObject $items -Count $MaxCount # -SetSeed
     }
 }
 

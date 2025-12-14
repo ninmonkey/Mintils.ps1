@@ -1,5 +1,6 @@
-﻿function Format-MintilsShowControlSymbols {
-   <#
+﻿
+function Format-MintilsShowControlSymbols {
+    <#
    .synopsis
         Replace ansi escape sequences with safe-to-print control char symbols
     .notes
@@ -67,11 +68,12 @@
     )
     process {
         # I'm assuming this isn't super performant, but it's good enough for smallish strings
-        foreach( $line in $InputText) {
-            ($line).ToString()?.EnumerateRunes() | %{
-                if( $_.Value -le 0x1f ) {
+        foreach ( $line in $InputText) {
+            ($line).ToString()?.EnumerateRunes() | ForEach-Object {
+                if ( $_.Value -le 0x1f ) {
                     [Text.Rune]::new( $_.Value + 0x2400 )
-                } else { $_ }
+                }
+                else { $_ }
             } | Join-String -sep ''
         }
     }
