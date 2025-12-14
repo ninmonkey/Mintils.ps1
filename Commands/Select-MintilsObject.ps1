@@ -3,7 +3,7 @@
     .synopsis
         Select first, last, some, etc...
     #>
-    [Alias('Mint.Select-Some')]
+    [Alias('Mint.Select-Some', 'Mint.One', 'Mint.First' )]
     # [OutputType( [string], 'Mintils.RelativePath' )]
     [CmdletBinding()]
     param(
@@ -12,21 +12,18 @@
         [Parameter(Mandatory, ValueFromPipelineByPropertyName, ValueFromPipeline)]
         [object[]] $InputObject,
 
+        [Parameter( Position = 0)]
         [int] $MaxCount = 5
     )
     begin {
         $found_count = 0
-        $PSCmdlet.MyInvocation.MyCommand.Name | Write-Debug
-        write-warning 'WIP: Not executing as expected for smart alias! 🐘'
-        if( $PSCmdlet.MyInvocation.MyCommand.Name -in @('one', 'first' ) ) {
-            $found_count = 1
+        if( $PSCmdlet.MyInvocation.InvocationName -in ('One', 'First', 'Mint.One', 'Mint.First' ) ) {
+            $MaxCount = 1
         }
-        # wait-debugger
-        # if( $PSCmdlet.MyInvocation. )
     }
     process {
-        foreach( $Item in $InputOBject ) {
-            if( $found_count -ge $MaxCount ) { return }
+        foreach( $Item in $InputObject ) {
+            if( $found_count -ge $MaxCount ) { continue }
             $found_count += 1
             $InputObject
         }
