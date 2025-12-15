@@ -4,15 +4,33 @@ function Enable-MintilsDefaultAlias {
         Load common aliases, only if user opts-in by calling this.
     .NOTES
         Because this is from a module, you might need to use 'Set-alias -Force' and mabye '-Scope Global'
+    .example
+        # Silently load, ex: for your profile
+        > Mint.Enable-Defaultalias -WithoutPSHost
+    .example
+        # interactively load, and show the summary of new aliases
+        Mint.Enable-Defaultalias
+
+        # or as objects
+        Mint.Enable-Defaultalias -PassThru
     #>
     [Alias('Mint.Enable-DefaultAlias')]
+    [OutputType( [System.Management.Automation.AliasInfo] )]
     [Cmdletbinding()]
     param(
         # required for readonly
         [switch] $Force,
 
+        # Maybe a redundant param
         [ArgumentCompletions('Global', 'Local', 'Script')]
-        [string] $Scope = 'Global'
+        [string] $Scope = 'Global',
+
+        # Do not write the new names to host
+        [Alias('WithoutPSHost')]
+        [switch] $Silent,
+
+        # output: [AliasInfo[]]
+        [switch] $PassThru
     )
 
     $splat = @{
@@ -23,21 +41,24 @@ function Enable-MintilsDefaultAlias {
     if( $PSBoundParameters.ContainsKey('Scope') -or (-not [string]::IsNullOrWhiteSpace( $Scope ) ) ) {
         $splat.Scope = $Scope
     }
-    @(
+    $items = @(
         # Set-Alias -PassThru -Name 'ls'   -Value Get-ChildItem
-        Set-Alias @splat -Name 'sc'   -Value Set-Content
-        Set-Alias @splat -Name 'cl'   -Value Set-Clipboard # -Force:$true
-        Set-Alias @splat -Name 'gcl'  -Value Get-Clipboard # -Force:$true
+        Set-Alias @splat -Name 'Sc'   -Value Set-Content
+        Set-Alias @splat -Name 'Cl'   -Value Set-Clipboard # -Force:$true
+        Set-Alias @splat -Name 'Gcl'  -Value Get-Clipboard # -Force:$true
         Set-Alias @splat -Name 'impo' -Value Import-Module # -Force:$true
-        Set-Alias @splat -Name 'Json.From' -Value 'ConvertFrom-Json'
-        Set-Alias @splat -Name 'Json'      -Value 'ConvertTo-Json'
+        Set-Alias @splat -Name 'Json' -Value 'Microsoft.PowerShell.Utility\ConvertTo-Json'
+        Set-Alias @splat -Name 'Json.From' -Value 'Microsoft.PowerShell.Utility\ConvertFrom-Json'
+
+        # Set-Alias @splat -Name 'Join-String' -Value 'Microsoft.PowerShell.Utility\Join-String' # when you need to prevent clobbering
 
         # aggressive aliases include aliases that don't have a prefix of 'mint'
-        Set-Alias @splat -Name 'RelPath' -Value 'Mintils\Format-MintilsRelativePath'
-        Set-Alias @splat -Name 'Goto'    -Value 'Mintils\Push-MintilsLocation'
-        Set-Alias @splat -Name 'Some'    -Value 'Mintils\Select-MintilsObject'
-        Set-Alias @splat -Name 'One'     -Value 'Mintils\Select-MintilsObject'
-
+        Set-Alias @splat -Name 'RelPath'  -Value 'Mintils\Format-MintilsRelativePath'
+        Set-Alias @splat -Name 'Goto'     -Value 'Mintils\Push-MintilsLocation'
+        Set-Alias @splat -Name 'Some'     -Value 'Mintils\Select-MintilsObject'
+        Set-Alias @splat -Name 'One'      -Value 'Mintils\Select-MintilsObject'
+        Set-Alias @splat -Name 'Mint.Fcc' -Value 'Mintils\Format-MintilsShowControlSymbols'
+        Set-Alias @splat -Name 'Fcc'      -Value 'Mintils\Format-MintilsShowControlSymbols'
         <#
             # maybe?
             Set-Alias @splat -Name 'Mint.Fcc' -Value 'Mintils\Format-MintilsShow'
@@ -45,10 +66,16 @@ function Enable-MintilsDefaultAlias {
         #>
 
     )   | Sort-Object
+    if( $PassThru ) {
+        $Items
+    }
+    if( -not $PassThru -and -not $Silent ) {
+        $Items
         | Join-String -f "`n - {0}" -op 'Mintils Set-Alias: ' -p {
             $pre, $rest = $_.DisplayName -split ' -> ', 2
             $pre.ToString().padRight(12, ' '), $rest -join ' -> '
         } | Write-Host -fg 'goldenrod'
+    }
 }
 
 function Find-MintilsAppCommand {
@@ -546,6 +573,56 @@ function Format-MintilsConsoleFileUri {
     }
 }
 
+function Write-MintilsConsoleHeader {
+    <#
+    .synopsis
+        Write a markdown header, or a <h1> with color
+    .description
+        Writes a console header like markdown. Or returns so that you can pipe it elsewhere.
+    .EXAMPLE
+        > 'hi world' | Mint.Write-H1 # Default writes to Host
+        > 'hi world' | Mint.Write-H1 -fg 'gray40' -bg 'gray30'
+    .example
+        # Write Colors to another stream: Verbose/ Write-Information, etc.
+        # without Write-Host
+        > $msg = 'Log Start: {0}' -f (Get-Date) | Mint.Write-H1 -PassThru
+        > $msg | Write-Verbose -Verbose
+        > $msg | Write-Information -infa Continue
+    #>
+    [Alias('Mint.Write-ConsoleHeader', 'Mint.Write-H1')]
+    # OutputType: always [Void], except when using -PassThru: output is [PoshCode.Pansies.Text]
+    [CmdletBinding()]
+    param(
+        [Alias('Name', 'Label')]
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [string] $Text,
+
+        # Text before your header text, or ' ## '
+        [string] $PrefixText = ' ## ',
+
+        # Text after your header text, or ' ## '
+        [string] $SuffixText = ' ## ',
+
+        # Returns the (New-Text) result instead of writing to the console/Host
+        [switch] $PassThru,
+
+        # accepts [RgbColor] or Null, otherwise the default color
+        [Alias('Fg')]
+        [RgbColor] $ForegroundColor = 'PaleVioletRed2',
+
+        # accepts [RgbColor] or Null, otherwise the default color
+        [Alias('Bg')]
+        [RgbColor] $BackgroundColor = 'SlateBlue4'
+    )
+    process {
+
+        $render = "${PrefixText}${Text}${SuffixText}"
+        $obj = $render | Pansies\New-Text -fg $ForegroundColor -bg $BackgroundColor
+        if( $PassThru ) { return $obj }
+        $obj | Pansies\Write-Host
+    }
+}
+
 function Format-MintilsConsoleHyperlink {
    <#
    .synopsis
@@ -727,6 +804,85 @@ function Format-MintilsShowControlSymbols {
                 else { $_ }
             } | Join-String -sep ''
         }
+    }
+}
+
+function Format-MintilsTextPredent {
+    <#
+    .synopsis
+        Indent lines using depth, or number of characters
+    .example
+        # To Visualize the padding added
+        Pwsh> 0..2 | Mint.Format-TextPredent -PrefixString ␠ -Depth 2 -TabSize 2
+
+        ␠␠␠␠0
+        ␠␠␠␠1
+        ␠␠␠␠2
+
+        Pwsh> 0..2 | Mint.Format-TextPredent -PrefixString ␠ -Depth
+
+        ␠␠␠␠␠␠␠␠0
+        ␠␠␠␠␠␠␠␠1
+        ␠␠␠␠␠␠␠␠2
+
+    .EXAMPLE
+    # Summarizing using depth
+
+    'Datetime'
+
+    'Properties' | Mint.Format-TextPredent
+    (Get-Date | Fime -MemberType Property).Name
+        | Sort-Object -Unique
+        | Mint.Format-TextPredent -Depth 2
+
+    'Methods' | Mint.Format-TextPredent
+    (Get-Date | Fime -MemberType Method).Name
+        | Sort-object -Unique
+        | Mint.Format-TextPredent -Depth 2
+    #>
+    [Alias(
+        'Mint.Format-TextPredent',
+        'Mint.Text-Predent' )]
+    [OutputType( [string] )]
+    [CmdletBinding()]
+    param(
+        # lines of input
+        [Alias('Content', 'Text', 'Lines')]
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [string[]] $InputText,
+
+        # What level to indent as. The Default is 1 = 4 spaces, 2 = 8 spaces, etc.
+
+        [Parameter( Position = 0 )]
+        [ArgumentCompletions( 0, 1, 2, 3, 4, 5, 6, 7, 8, 9)]
+        [Alias('Level')]
+        [int] $Depth = 1,
+
+        # One $Depth is ( $Str * $TabSize ). ie: 2, 4, etc.
+        [ArgumentCompletions( 0, 1, 2, 3, 4, 5, 6, 7, 8, 9)]
+        [int] $TabSize = 4,
+
+        # what gets multiplied. The default is a ' '
+        [ArgumentCompletions( "' '", "`u{2420}", '"`t"', "' - '")]
+        [string] $PrefixString = ' ',
+
+        # When multiple are passed
+        [string] $Separator = "`n"
+
+    )
+    begin {
+        $Prefix = $PrefixString * ($Depth * $TabSize) -join ''
+        [Collections.Generic.List[string]] $lines = @()
+        # $found_count = 0
+        # if( $PSCmdlet.MyInvocation.InvocationName -in ('Mint.RandomOne' ) ) {
+        #     $MaxCount = 1
+        # }
+    }
+    process {
+        $lines.AddRange( [string[]] $InputText )
+    }
+    end {
+        $lines | Join-String -f "${Prefix}{0}" -Sep $Separator
     }
 }
 
@@ -1064,18 +1220,21 @@ function Get-MintilsUniquePropertyValue {
 function Get-MintilsVariableSummary {
     <#
     .SYNOPSIS
-        summarize a list of names, without visible errors
+        summarize and search for variables in scope, without errors when missing
     .EXAMPLE
-        Pwsh> mint.Get-VariableSummary -HasPrefix 'PS'
+        Pwsh> Mint.Get-VariableSummary -HasPrefix 'PS'
     .EXAMPLE
-        Pwsh> mint.Get-VariableSummary -HasPrefix host -HasSuffix 'preference'
+        Pwsh> Mint.Get-VariableSummary -HasPrefix host -HasSuffix 'preference'
     .EXAMPLE
-        Pwsh> mint.Get-VariableSummary -PartialNames style
+        Pwsh> Mint.Get-VariableSummary -PartialNames style
     .EXAMPLE
-        Pwsh> mint.Get-VariableSummary -BeginsWith '_'  -PartialNames 'editorservices', 'vscode'
+        Pwsh> Mint.Get-VariableSummary -BeginsWith '_'  -PartialNames 'editorservices', 'vscode'
+    .EXAMPLE
+        Pwsh> Mint.Get-VariableSummary -PartialNames 'last' -Scope script # nothing
+        Pwsh> Mint.Get-VariableSummary -PartialNames 'last' -Scope global # returns $LASTEXITCODE
     #>
     [CmdletBinding()]
-    [Alias('mint.Get-VariableSummary')]
+    [Alias('Mint.Get-VariableSummary')]
     [OutputType( 'Mintils.Variable.Summary' )]
     param(
         # exact match
