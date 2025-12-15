@@ -22,15 +22,20 @@
         [Parameter(Mandatory, ValueFromPipeline)]
         [string] $Text,
 
+        # Text before your header text, or ' ## '
         [string] $PrefixText = ' ## ',
+
+        # Text after your header text, or ' ## '
         [string] $SuffixText = ' ## ',
 
-        # returns the (New-Text) result instead of writing to the console
+        # Returns the (New-Text) result instead of writing to the console/Host
         [switch] $PassThru,
 
+        # accepts [RgbColor] or Null, otherwise the default color
         [Alias('Fg')]
         [RgbColor] $ForegroundColor = 'PaleVioletRed2',
 
+        # accepts [RgbColor] or Null, otherwise the default color
         [Alias('Bg')]
         [RgbColor] $BackgroundColor = 'SlateBlue4'
     )
