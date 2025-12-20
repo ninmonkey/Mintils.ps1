@@ -1,5 +1,5 @@
 {
-	"folders": [ // 2025-11-28
+	"folders": [ // 2025-12-20
 		{
 			"path": "."
 		}
@@ -7,6 +7,16 @@
     "settings": {
         "cSpell.words": [
             "Mintils"
-        ]
-    }
+        ],
+        "github.copilot.nextEditSuggestions.enabled": true,
+        // "github.copilot.enable": {
+        //     "*": true,
+        //     "plaintext": false,
+        //     "markdown": false,
+        //     "scminput": false
+        // },
+
+        "chat.mcp.autostart": "never",
+    },
+
 }
