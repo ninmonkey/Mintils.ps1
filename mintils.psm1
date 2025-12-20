@@ -1,3 +1,58 @@
+function _Resolve-DirectoryFromPathlike {
+    <#
+    .SYNOPSIS
+        [private] get filepath if possible from many object types. Prefer filename with path, fallback to directory if needed.
+    .DESCRIPTION
+        returns $null if all paths failed, and writes a warning.
+    .example
+        # Externally test using this:
+        & ( ipmo Mintils -PassThru ) { _Resolve-DirectoryFromPathLike ( gcm Add-ExcelName ) -Debug }
+    #>
+    [CmdletBinding()]
+    param(
+        # File, Directory, PSModuleInfo, String, Etc
+        # Supports Types: ApplicationInfo, DirectoryInfo, FileSystemInfo, FunctionInfo, PSModuleInfo, String,
+        [object] $InputObject
+    )
+
+    $ResolvedItem = Get-Item -ea ignore $InputObject
+
+    [PSCustomObject]@{
+        ResolvedType    = ( $ResolvedPath )?.GetType().FullName
+        Resolved        = ( $ResolvedPath )?.ToString()
+        InputObjectType = ( $InputObject )?.GetType().FullName
+        InputObject     = ( $InputObject )?.ToString()
+    } | ConvertTo-Json -Depth 0 | Join-String -f 'Mint.Goto parameters: {0}' | Write-Debug
+
+    if( $InputObject -is [IO.FileSystemInfo] ) {
+        return $InputObject
+    }
+    if( $InputObject -is [System.Management.Automation.PSModuleInfo] ) {
+        return ( Get-Item $InputObject.Path )
+    }
+    if( $InputObject -is [IO.DirectoryInfo] ) {
+        return $InputObject
+    }
+    if( $InputObject -is [Management.Automation.FunctionInfo] ) {
+        [Management.Automation.FunctionInfo] $maybeFunc = $InputObject
+        $Resolved = Get-Item $maybeFunc.ScriptBlock.Ast.Extent.File
+        if( $null -eq $Resolved ) {
+            throw "Found [FunctionInfo] but Ast.Extent.File was null. ( Verify the module '$( $InputObject.Source  )' is loaded )"
+        }
+        return $Resolved
+    }
+    if( $InputObject -is [Management.Automation.ApplicationInfo] ) {
+        [Management.Automation.ApplicationInfo] $maybeApp = $InputObject
+        $Resolved = ( Get-Item $maybeApp.Source ) ?? ( Get-Item $maybeApp.Path )
+        return $Resolved
+    }
+    if( $InputObject -is [string] -and $Null -ne $ResolvedItem ) {
+        return $ResolvedItem
+    }
+    "Unhandled input type when converting '${InputObject}' of type $( ( $InputObject)?.GetType() ) to path: {0}" | Write-Warning
+    # Maybe always attempt PSPath ? Or leave that to the caller?
+}
+
 function Enable-MintilsDefaultAlias {
     <#
     .SYNOPSIS
@@ -314,6 +369,10 @@ function Find-MintilsGitRepository {
             # pushd $curRepo
             try {
 
+                <#
+                might return:
+                    error: No such remote 'origin'
+                #>
                 $urlOrigin = & $binGit -C $curRepo remote get-url origin
                 $urlOrigin = $urlOrigin -replace '(\.git)$', ''
                 # $urlOrigin = git -C $curRepo remote get-url origin
@@ -1217,6 +1276,71 @@ function Get-MintilsUniquePropertyValue {
     }
 }
 
+function Get-MintilsUriQuery {
+    <#
+    .synopsis
+        Parse a [Uri]'s query string, returning as a hashtable
+    .NOTES
+        I couldn't think of a good name.
+
+        Check out related types:
+            [Web.HttpUtility] -> ParseQueryString, HtmlEncode/Decode, HtmlAttributeEncode/Decode
+            [UriParser]
+            [UriBuilder]
+            [UriComponents]
+
+    .EXAMPLE
+    #>
+    [OutputType( [object] )]
+    [Alias(
+        # I need a better name
+        'Get-MintilsUrlQuery',
+        'Mint.Link.Query',
+        'Mint.Link.ParseQuery',
+        'Mint.Url.ParseQuery',
+        'Get-MintilsUriQueryKeys',
+        'Get-MintilsUrlQueryKeys',
+        'Mint.Get-UriQueryKeys'
+        # 'Mint.Url-KeyNames',
+        # 'Mint.Uri-KeyNames'
+    )]
+    # [OutputType( )]
+    [CmdletBinding()]
+    param(
+        [Parameter( Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [Alias('Url', 'Uri', 'Obj', 'Href', 'InputObject' )]
+        [object] $InputUri,
+
+        # use [Uri.PathAndQuery] vs the default: [Uri.Query]
+        [switch] $IncludePath,
+
+        # Return keys, skip value names
+        [switch] $KeysOnly
+    )
+    begin {}
+    process {
+
+        # only emit query key names
+        if( $IncludePath ) {
+            $parsed = [System.Web.HttpUtility]::ParseQueryString( ([uri] $InputUri).PathAndQuery )
+        } else {
+            $parsed = [System.Web.HttpUtility]::ParseQueryString( ([uri] $InputUri).Query )
+        }
+        if( $KeysOnly ) { return $parsed.Keys }
+
+        $info = [ordered]@{}
+
+        foreach( $key in $parsed.Keys ) {
+            $info[ $key ] = $parsed[ $Key ]
+        }
+        [pscustomobject] $Info
+        # or: ParseQueryString( ([uri] $InputUri).Query, $Encoding )
+    }
+    end {
+
+    }
+}
+
 function Get-MintilsVariableSummary {
     <#
     .SYNOPSIS
@@ -1490,6 +1614,66 @@ function New-MintilsSafeFilename {
 
     "Generated: '${render}' from template: ${TemplateString}" | Write-Verbose
     $render
+}
+
+function Push-MintilsLocation {
+    <#
+    .synopsis
+        go to a path, auto convert-paths, since push/pop doesn't 2025-10-29
+    .example
+        # test whether types detect the correct properties
+        $someFile = $Profile.CurrentUserAllHosts
+        $someFile | Mint.Goto -Debug
+        $someFile | Get-Item | Mint.Goto -Debug
+        $Profile  | Mint.Goto -Debug
+        (gmo mintils) | Mint.Goto -Debug -PassThru |% fullname
+        (gmo mintils).Path | Mint.Goto -debug -PassThru | % Fullname
+    #>
+    [CmdletBinding()]
+    [Alias( 'Mint.Push-Location', 'Mint.Goto')]
+    param(
+        # Goto Location of this file. Files and Directories are valid
+        [Alias('FullName')]
+        [Parameter(ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [Object] $InputObject,
+
+        # Directory or PSPath
+        [Alias('PSPath')]
+        [Parameter(ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [object] $Directory,
+
+        # Also output the directory you moved to as an object
+        [switch] $PassThru,
+
+        # writes new path to the console as dim text
+        [switch] $PSHost
+        # [string] $StackName = 'mintils.goto' # might not affect user scope
+    )
+    begin {}
+    end {
+        $Resolved = _Resolve-DirectoryFromPathlike $InputObject
+        Join-String -f 'Resolved: "{0}"' -InputObject ( $Resolved )?.ToString() | Write-Verbose
+
+        if( $Null -eq $Resolved ){
+            $Resolved = _Resolve-DirectoryFromPathlike $Directory
+        }
+        if( $Null -eq $Resolved ) {
+            throw "Unhandled error resolving '${Resolved}' of type: '$( ( $Resolved)?.GetType() )' "
+        }
+
+        if( Test-Path -ea 'ignore' $Resolved.Directory ) {
+            $null = Microsoft.PowerShell.Management\Push-Location -Path $Resolved.Directory #
+        } elseif ( Test-Path -ea 'ignore' $Resolved ) {
+            $null = Microsoft.PowerShell.Management\Push-Location -Path $Resolved
+        }
+        if( $PSHost ) {
+            $Resolved | Join-String -f '    Move to => "{0}"'
+                | Write-Host -bg 'gray20' -fg 'gray30'
+        }
+
+        # $null = Microsoft.PowerShell.Management\Push-Location -Path $Resolved.Directory # -StackName 'mintils.goto'
+        if( $PassThru ) { return $Resolved } # emit objects instead of 'Push-Location'. Allowing found filename to be returned.
+    }
 }
 
 function Quick-MintilsFilterByPropertyValue {
