@@ -1,4 +1,6 @@
-﻿<#
+﻿#requires -PSEdition Core
+#requires -Modules pansies
+<#
 .EXAMPLE
     . .\Build\mintils.Build.Module.ps1; $commands_summary ;
 #>
@@ -8,7 +10,7 @@ $myRoot       = $myFile | Split-Path | Split-Path
 $BuildConfig = @{
     LineEnding = "`r`n"
 }
-# wait-debugger
+Import-Module Pansies
 
 Push-Location -Stack 'mintils.build' $myRoot
 $commands_public   = @(
