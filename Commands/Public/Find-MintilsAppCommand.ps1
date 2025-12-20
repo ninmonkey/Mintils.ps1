@@ -14,6 +14,12 @@
         Find-MintilsAppCommand 'npm', 'node', 'pwsh' | ft
     .example
         Find-MintilsAppCommand 'npm', 'node', 'pwsh' -FilterCommandType Application, ExternalScript
+    .link
+        Mintils\Find-MintilsAppCommand
+    .link
+        Mintils\Require-MintilsFileExists
+    .link
+        Mintils\Require-MintilsAppExists
     #>
     [Alias('Mint.Find-AppCommand')]
     [OutputType( 'Mintils.AppCommand.Info' )]
