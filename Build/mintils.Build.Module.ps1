@@ -8,12 +8,21 @@ $myRoot       = $myFile | Split-Path | Split-Path
 $BuildConfig = @{
     LineEnding = "`r`n"
 }
+# wait-debugger
 
 Push-Location -Stack 'mintils.build' $myRoot
 $commands_public   = @(
     # to recurse or not ?
-    @( foreach ($potentialDirectory in 'Commands') {
-        Join-Path $myRoot $potentialDirectory | Get-ChildItem -ea ignore
+    @( foreach ( $potentialDirectory in 'Commands/Public' ) {
+        Get-ChildItem -Recurse -ea ignore -Path ( Join-Path $myRoot $potentialDirectory )
+    })
+    | Where-Object name -NotMatch '^Scrap'
+    | ? Extension -in '.ps1' #, '.psm1', '.psd1'
+)
+$commands_private   = @(
+    # to recurse or not ?
+    @( foreach ( $potentialDirectory in 'Commands/Private') {
+        Get-ChildItem -Recurse -ea ignore -Path ( Join-Path $myRoot $potentialDirectory )
     })
     | Where-Object name -NotMatch '^Scrap'
     | ? Extension -in '.ps1' #, '.psm1', '.psd1'
@@ -31,6 +40,7 @@ $commands_summary.AddRange(
                 Name          = $Item.Name
                 Size          = '{0:n2} kb' -f ( $Item.Length / 1kb )
                 LastWriteTime = $Item.LastWriteTime
+                Verb          = @( $Item.BaseName -split '-', 2 )[0]
                 # Path          = $Item
                 FullName      = $Item                                  # convert to alias
                 # Documentation = ''
@@ -38,6 +48,29 @@ $commands_summary.AddRange(
                 # HasUsingNamespaceStatement = $false
             }
         }
+        | Sort-Object Verb, Name
+    )
+)
+$commands_summary.AddRange(
+    @(
+        $commands_private
+        | %{
+            $item = $_
+            [pscustomobject]@{
+                PSTypeName    = 'build.mintils.command.private'
+                Public        = $False
+                Name          = $Item.Name
+                Size          = '{0:n2} kb' -f ( $Item.Length / 1kb )
+                LastWriteTime = $Item.LastWriteTime
+                Verb          = @( $Item.BaseName -split '-', 2 )[0]
+                # Path          = $Item
+                FullName      = $Item                                  # convert to alias
+                # Documentation = ''
+                # HasRequiresStatment        = $false
+                # HasUsingNamespaceStatement = $false
+            }
+        }
+        | Sort-Object Verb, Name
     )
 )
 
@@ -54,8 +87,11 @@ if( $commands_summary.count -gt 0 ) {
     $myModuleFile = Join-Path $DestinationRoot "${myModuleName}.psm1"
 
     @(
+        foreach ( $item in ( $commands_summary | ? -Not Public ) )  {
+            ( Get-Content -raw (Get-Item $item.FullName ) ) -replace '\r?\n', $BuildConfig.LineEnding
+        }
         # todo: optimize IO. And minimize any extra memory allocations for strings
-        foreach ( $item in $commands_summary )  {
+        foreach ( $item in ( $commands_summary | ? Public ) )  {
             ( Get-Content -raw (Get-Item $item.FullName ) ) -replace '\r?\n', $BuildConfig.LineEnding
         }
     )

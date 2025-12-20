@@ -33,6 +33,10 @@
         [Alias('AsRegexLiteral', 'AsLiteral')]
         [switch] $EscapeRegex,
 
+        # Only join the distinct list of values
+        [Alias('Distinct')]
+        [switch] $Unique,
+
         # Default allows partial matches. This forces the full string to match the or codintion
         [Parameter()]
         [switch] $FullMatch
@@ -48,6 +52,7 @@
     end {
 
         $segments
+            | Sort-Object -Unique
             | Join-String -sep '|' -Prop {
                 $EscapeRegex ? ([Regex]::Escape( $_ )) : $_ }
             | Join-String -f $final_fstr

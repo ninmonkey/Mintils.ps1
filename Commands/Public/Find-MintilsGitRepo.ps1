@@ -64,6 +64,10 @@
             # pushd $curRepo
             try {
 
+                <#
+                might return:
+                    error: No such remote 'origin'
+                #>
                 $urlOrigin = & $binGit -C $curRepo remote get-url origin
                 $urlOrigin = $urlOrigin -replace '(\.git)$', ''
                 # $urlOrigin = git -C $curRepo remote get-url origin
