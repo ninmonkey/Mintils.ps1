@@ -21,6 +21,9 @@
         Mintils\Find-MintilsWorkspace
     .link
         Mintils\Find-MintilsGitRepository
+    .link
+        Mint.Find-VsCodeWorkspace -IncludeVsCodeFolders
+        # outputs: .vscode' and '.code-workspace'
     #>
     [Alias(
         'Mint.Find-VsCodeWorkspace',
@@ -37,7 +40,12 @@
 
         # for: fd --max-depth <int>
         [Alias('Depth')]
-        [int] $MaxDepth = 5
+        [int] $MaxDepth = 5,
+
+
+        # Search includes for '.vscode' folders
+        [Alias('IncludeFolders')]
+        [switch] $IncludeVsCodeFolders
     )
     begin {}
     process {}
@@ -45,7 +53,12 @@
         $rootDir = Get-Item -ea 'stop' $BaseDirectory
         "Depth: ${MaxDepth}, Extension: 'code-workspace', Root: ${RootDir}" | Write-Verbose
         $pathSeparator = '/'
-        fd --max-depth 7 --type 'file' -e 'code-workspace' --absolute-path --path-separator $pathSeparator --base-directory $rootDir
+        fd --max-depth $MaxDepth --type 'file' -e 'code-workspace' --absolute-path --path-separator $pathSeparator --base-directory $rootDir
             | Get-Item -ea 'continue'
+
+        if( $IncludeVscodeFolders ) {
+            fd --max-depth $MaxDepth --type 'directory' '\.vscode' --absolute-path --path-separator $pathSeparator --base-directory $rootDir --hidden
+                | Get-Item -ea 'continue'
+        }
     }
 }
