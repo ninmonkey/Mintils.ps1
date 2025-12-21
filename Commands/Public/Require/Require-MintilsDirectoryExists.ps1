@@ -38,11 +38,11 @@ function Require-MintilsDirectoryExists {
     }
 
     if( $WithoutCreate -and -not ( Test-Path $Resolved ) ) {
-        throw "Directory does not exist: '${Path}' ! WithoutCreate: ${WithoutCreate}, withoutForce ${WithoughtForce}"
+        throw "Directory does not exist: '${Path}' ! WithoutCreate: ${WithoutCreate}, withoutForce ${WithoutForce}"
     }
 
     try {
-        $newPath = mkdir -Path $Path -Confirm:$( $Confirm ) -ev 'evMkdir' -ea 'stop'
+        $newPath = mkdir -Path $Path -Confirm:$( $Confirm ) -ev 'evMkdir' -ea 'stop' -Force:$( -not $WithoutForce )
         if( Test-Path $newPath ) {
             return $newPath
         }
@@ -53,5 +53,5 @@ function Require-MintilsDirectoryExists {
             throw
         }
     }
-    throw "Failed resolving diretory: '${Path}' !"
+    throw "Failed resolving directory: '${Path}' !"
 }
