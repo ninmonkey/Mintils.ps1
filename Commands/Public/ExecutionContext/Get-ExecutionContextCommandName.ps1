@@ -21,7 +21,7 @@
         'Mint.ExContext.Get-CommandName'
     )]
     [CmdletBinding()]
-    # [OutputType( [Collections.Generic.List[String]] )]
+    [OutputType( [Management.Automation.CommandInfo], [string] )]
     param(
         [Parameter(mandatory, ValueFromPipeline)]
         [string] $Name,
