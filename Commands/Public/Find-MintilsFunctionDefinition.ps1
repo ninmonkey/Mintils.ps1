@@ -45,9 +45,9 @@
                     $resolve.ScriptBlock.File
                 )
 
-                $msg | New-Text -fg 'gray80' -bg 'gray30'
-                    # | Write-information # for now just write host, to simplify passing InfaAction or not
-                    | Write-Host
+                if( -not $PassThru ) {
+                    $msg | New-Text -fg 'gray80' -bg 'gray30' | Write-Host
+                }
 
                 if( $AsCommand ) { return $Resolve }
                 return Get-Item $resolve.ScriptBlock.File
@@ -58,9 +58,9 @@
                     $resolve.ScriptBlock.Ast.Extent.StartLineNumber
                     $resolve.ScriptBlock.File
                 )
-                $msg | New-Text -fg 'gray80' -bg 'gray30'
-                    # | Write-information # for now just write host, to simplify passing InfaAction or not
-                    | Write-Host
+                if( -not $PassThru ) {
+                    $msg | New-Text -fg 'gray80' -bg 'gray30' | Write-Host
+                }
 
                 if( $AsCommand ) { return $Resolve }
                 return Get-Item $resolve.ScriptBlock.File
@@ -68,13 +68,18 @@
             'Unhandled converting command path from type: {0}' -f $Obj.GetType().Name  | Write-Warning
             return $Null
         }
+        $binCode = Mint.Require-AppInfo -Name 'code'
     }
 
     process {
         $query = CoerceCommand -Obj $InputObject
         foreach($Item in $query) {
-            if( $PassThru ) { return $item }
-            code --goto ( Get-Item -ea 'stop' $item.FullName )
+            if( $PassThru ) { $item; continue; }
+            $binArgs = @(
+                '--goto'
+                ( Get-Item -ea 'stop' $item.FullName )
+            )
+            & $binCode @binArgs
         }
 
     }
