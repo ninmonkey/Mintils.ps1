@@ -34,7 +34,6 @@
     )
     begin {
         $binCode = Mint.Require-AppInfo -Name 'code'
-        write-warning 'WIP: New Find-Func implementation'
     }
     process {
         $found = _Resolve-CommandFileLocation -InputObject $InputObject -Verbose
@@ -55,38 +54,5 @@
         }
 
         & $binCode @( '--goto', $Found.FileWithLineNumberString )
-        # throw "old logic starts here"
-        # $query = _Resolve-CommandFileLocation -InputObject $InputObject
-        # foreach($Item in $query) {
-        #     if( $PassThru ) { $item; continue; }
-        #     if( -not (Test-Path $Item.FullName ) ) {
-        #         $msg = '.FullName not found on Item: {0}' -f $Item
-        #         $msg | Write-Warning
-        #         $msg | write-error
-        #         continue
-        #     }
-        #     $binArgs = @(
-        #         '--goto'
-        #         ( Get-Item -ea 'stop' $item.FullName )
-        #     )
-
-        #     if( $item.StartLineNumber -and $item.Path ) {
-        #         $binArgs = @(
-        #             '--goto'
-        #             '{0}:{1}' -f @(
-        #                 Get-Item -ea 'stop' $Item.Path.FullName
-        #                 $item.StartLineNumber
-        #             )
-        #         )
-        #     }
-        #     if( -not $PassThru ) {
-        #         $binArgs
-        #             | Join-String -sep ' ' -op '    invoke code => '
-        #             | Write-Host -fg 'gray80' -bg 'gray30'
-        #     }
-
-        #     & $binCode @binArgs
-        # }
-
     }
 }
