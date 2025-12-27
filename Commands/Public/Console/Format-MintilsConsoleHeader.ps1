@@ -37,13 +37,23 @@
 
         # accepts [RgbColor] or Null, otherwise the default color
         [Alias('Bg')]
-        [RgbColor] $BackgroundColor = 'SlateBlue4'
+        [RgbColor] $BackgroundColor = 'SlateBlue4',
+
+        # number of newlines to prefix, and suffix the header with. otherwise none. ( when -not $PassThru ). Default is 0.
+        [int] $PadBothLines = 0
     )
     process {
 
         $render = "${PrefixText}${Text}${SuffixText}"
         $obj = $render | Pansies\New-Text -fg $ForegroundColor -bg $BackgroundColor
         if( $PassThru ) { return $obj }
-        $obj | Pansies\Write-Host
+
+        if( -not $PadBothLines ) {
+            $obj | Pansies\Write-Host
+        } else {
+            $Pad = "`n" * $PadBothLines -join ''
+            $Obj| Join-String -f "${Pad}{0}${Pad}"
+                | Pansies\Write-Host
+        }
     }
 }
