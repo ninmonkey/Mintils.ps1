@@ -62,6 +62,14 @@
             Bg = $Null
             Category = 'Core'
         }
+        @{
+            Name = 'DimGood'
+            SemanticName = 'Good.NoBg'
+            Description = @( 'Good text.', 'Fg: Light Green, Bg: null.' ) -join ' '
+            Fg = '#a2bb91'
+            Bg = $Null
+            Category = 'Core'
+        }
         <# superfluous section #>
 
         @{
