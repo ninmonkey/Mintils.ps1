@@ -1,4 +1,5 @@
-﻿function _Invoke-App.VsCode {
+﻿# remove the majority of this implementation from the repo
+function _Invoke-App.VsCode {
     <#
     .SYNOPSIS
         [internal] lower level VS Code wrapper. No error handling.
@@ -39,8 +40,13 @@
         [Parameter()]
         [object] $GotoFile,
 
+        [Alias('Add')]
         [Parameter()]
         [object] $AddDirectory,
+
+        [Alias('Remove')]
+        [Parameter()]
+        [object] $RemoveDirectory,
 
         # Outputs BinArgs commands as [List[object]]
         [Alias('TestOnly')]
@@ -80,74 +86,138 @@
         [switch] $ProfileStartup,
         [switch] $DisableExtensions,
 
+        # force a new window
+        [switch] $NewWindow,
+
+        # Force open a file or folder in an existing window
+        [switch] $ReuseWindow,
+
         [ValidateSet('on', 'off')]
-        [string] $Sync
+        [string] $Sync,
+
+        # code: 'code --diff <file1> <file2>'
+        [ValidateScript({throw 'nyi'})]
+        [switch] $Diff,
+
+        # code: 'code --merge <path1> <path2> <base> <result>'
+        [ValidateScript({throw 'nyi'})]
+        [switch] $Merge,
+
+        # wait for files to be closed
+        [switch] $Wait,
+
+        [ArgumentCompletions('en-US', 'de-de')]
+        [string] $Locale,
+
+        # cmd: "code --user-data-dir <dir>". Specifies the directory that user data is kept in. Can be used to open multiple distinct instances of Code.
+        [string] $UserDataDir,
+
+        # cmd: "code --profile <name>".  Opens the provided folder or workspace with the given profile and associates the profile with the workspace. If the profile does not exist, a new empty one is created.
+        [string] $Profile
     )
     begin {}
     end {
         [Collections.Generic.List[Object]] $binArgs = @()
+        [Collections.Generic.List[Object]] $OptionsArgs = @()
+
 
         $PSBoundParameters | ConvertTo-Json -Depth 2
             | Join-String -op 'PSboundParams: ' | Write-Verbose
 
+         <# options that are composed with the base ones #>
+        if( $VerboseLog ) {
+            $OptionsArgs.Add( '--verbose' )
+        }
+        if( $LogLevel ) {
+            $OptionsArgs.AddRange(@( '--log', $LogLevel ))
+        }
+        if( $Telemetry ) {
+            $OptionsArgs.Add( '--telemetry' )
+        }
+        if( $Transient ) {
+            $OptionsArgs.Add( '--transient' )
+        }
+        if( $DisableGPU ) {
+            $OptionsArgs.Add( '--disable-gpu' )
+        }
+        if( $Sync ) {
+            $OptionsArgs.Add( '--sync', $Sync )
+        }
+        if( $ProfileStartup ) {
+            $OptionsArgs.Add( '--sync', $Sync )
+        }
+        if( $DisableExtensions ) {
+            $OptionsArgs.Add( '--sync', $Sync )
+        }
+        if( $NewWindow ) {
+            $OptionsArgs.Add( '--new-window' )
+        }
+        if( $ReuseWindow ) {
+            $OptionsArgs.Add( '--reuse-window' )
+        }
+        if( $Wait ) {
+            $optionsArgs.Add( '--wait' )
+        }
+        if( $Locale ) {
+            $optionsArgs.AddRange(@( '--locale', $Locale ))
+        }
+        if( $UserDataDir ) {
+            $optionsArgs.AddRange(@( '--user-data-dir', $UserDataDir ))
+        }
+        if( $Profile ) {
+            $optionsArgs.AddRange(@( '--profile', $Profile ))
+        }
+
         <# modal modes, that requires a clear/reset $BinArgs #>
         if( $FileWithLineNumberString ) {
             $binArgs = @(
+                $OptionsArgs
                 '--goto'
                 $FileWithLineNumberString
             )
         }
         if( $GotoFile ) {
             $binArgs = @(
+                $OptionsArgs
                 '--goto'
                 $GoToFile
             )
         }
         if( $AddDirectory ) {
             $binArgs = @(
+                $OptionsArgs
                 '--add'
                 $AddDirectory
             )
         }
+        if( $RemoveDirectory ) {
+            $binArgs = @(
+                $OptionsArgs
+                '--remove'
+                $RemoveDirectory
+            )
+        }
         if( $Version ) {
             $binArgs = @(
+                $OptionsArgs
                 '--version'
             )
         }
         if( $LocateShellIntegrationPath ) {
             $binArgs = @(
+                # $OptionsArgs
                 '--locate-shell-integration-path'
                 $LocateShellIntegrationPath
             )
         }
         if( $Status ) {
-            $binArgs = @( '--status' ) # is this mode exclusive?
+            $binArgs = @(
+                # $OptionsArgs
+                '--status'
+            ) # is this mode exclusive?
         }
-
-        <# options that are composed with the base ones #>
-        if( $VerboseLog ) {
-            $binArgs.Add( '--verbose' )
-        }
-        if( $LogLevel ) {
-            $binArgs.AddRange(@( '--log', $LogLevel ))
-        }
-        if( $Telemetry ) {
-            $binArgs.Add( '--telemetry' )
-        }
-        if( $Transient ) {
-            $binArgs.Add( '--transient' )
-        }
-        if( $DisableGPU ) {
-            $binArgs.Add( '--disable-gpu' )
-        }
-        if( $Sync ) {
-            $binArgs.Add( '--sync', $Sync )
-        }
-        if( $ProfileStartup ) {
-            $binArgs.Add( '--sync', $Sync )
-        }
-        if( $DisableExtensions ) {
-            $binArgs.Add( '--sync', $Sync )
+        if( $FromStdIn ) {
+            $binArgs.add( '-' )
         }
 
         if( $WhatIf ) {
