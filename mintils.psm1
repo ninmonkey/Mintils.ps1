@@ -1,3 +1,268 @@
+function _Get-TextStyle {
+    <#
+    .SYNOPSIS
+        [internal] lookup text colors by semantic names
+    .example
+    #>
+    [CmdletBinding()]
+    param(
+        # Select first matching pattern
+        [Parameter(Mandatory, ParameterSetName='ByNameLookup', Position = 0)]
+        [Alias('Name')]
+        [string] $ByName,
+
+        # only select one exact match
+        [Parameter(ParameterSetName='ByNameLookup')]
+        [Alias('Strict', 'ExactOnly')]
+        [switch] $OneOrNone,
+
+        [Parameter(Mandatory, ParameterSetName='ByListAll')]
+        [Alias('All', 'List')]
+        [switch] $ListAll
+    )
+
+    $styles = @(
+        <# core basic colors #>
+        @{
+            Name = 'DimDark'
+            SemanticName = 'GeneralText.LowContrast'
+            Description = @(
+                'Dim general text. Grayish.',
+                'Fg: Gray, Bg: dark gray/black.',
+                'Dark but is not bold / lower contrast' ) -join ' '
+            Fg = 'gray40'
+            Bg = 'gray15'
+            Category = 'Core'
+        }
+        @{
+            Name = 'Dim'
+            SemanticName = 'GeneralText'
+            Description = @(
+                'Dim general text. Grayish.',
+                'Default style for "Write-Information"'
+                'Fg: Gray, Bg: Gray.',
+                'Not bold / lower contrast' ) -join ' '
+            Fg = 'gray70'
+            Bg = 'gray30'
+            Category = 'Core'
+        }
+        @{
+            Name = 'DimInfo'
+            SemanticName = 'DimInfo.NoBg'
+            Description = 'Dim Information text. Ex: light pink/purple. Low contrast'
+            Fg = '#e9addc'
+            Bg = $null
+            Category = 'Core'
+        }
+        @{
+            Name = 'DimWarning'
+            SemanticName = 'Warning.NoBg'
+            Description = @( 'Dim warning text.', 'Low severity warnings.', 'Fg: yellow, Bg: null.' ) -join ' '
+            Fg = '#ebcb8b'
+            Bg = $Null
+            Category = 'Core'
+        }
+        <# superfluous section #>
+
+        @{
+            Name = 'Gray.Dark.LowContrast'
+            SemanticName = 'Gray.Dim.Dark.LowContrast'
+            Description = @(
+                'Dim gray text with BG',
+                'Fg: Gray, Bg: Gray.',
+                'Low contrast.' ) -join ' '
+            Fg = 'gray30'
+            Bg = 'gray20'
+            Category = 'Extra'
+        }
+        @{
+            Name = 'Gray.Bright.BoldContrast'
+            SemanticName = 'Gray.Bright.BoldContrast'
+            Description = @(
+                'Bold Light Gray text with BG',
+                'Fg: BrightGray, Bg: Gray.',
+                'High contrast.' ) -join ' '
+            Fg = 'gray80'
+            Bg = 'gray30'
+            Category = 'Extra'
+        }
+    ).forEach( [pscustomobject] )
+        | Sort-Object -Prop Category, Name, SemanticName, Description # or: Name, Description
+        | Select-Object -Prop 'Name', 'SemanticName', 'Fg', 'Bg', 'Category', 'Description' # View / FormatData order
+
+    switch( $PSCmdlet.ParameterSetName ) {
+        'ByNameLookup' {
+            # if strict, find exact or throw
+            if( $OneOrNone ) {
+                $found = $styles | ? -Prop Name -eq $ByName
+                if( $found.count -eq 0 ) {
+                    $found = $styles | ? -Prop Name -like "*${ByName}*"
+                }
+                if( $found.Count -eq 1 ) { return $found }
+                else {
+                    $found | Join-String -p Name -sep ', ' -op 'ambigous styles found!: ' | Write-Verbose
+                    throw ("Strict match Name: '${ByName}' failed, found $( $found.count ) matches! ")
+                }
+            }
+            # else match on first
+            $found = $styles
+                | Where-Object { $_.Name -like "*${ByName}*" }
+                | Select-Object -First 1
+
+            if( -not $found ) {
+                throw "Style name '$ByName' not found. Available styles: " +
+                    ( $styles.Name -join ', ' )
+            }
+            $found | Join-String -f 'TextStyle found: "{0}"' -p Name | Write-Verbose
+            return $found
+        }
+        'ByListAll' {
+            return $styles
+            break
+        }
+        default {
+            throw "Unhandled ParameterSetName: '$( $PSCmdlet.ParameterSetName )' !"
+        }
+    }
+}
+
+function _Resolve-CommandFileLocation {
+    <#
+    .SYNOPSIS
+        resolve many kinds into Filename and line numbers, if possible. [private/internal]
+    .NOTES
+        Some related types:
+        > Find-Type -namespace System.Management.Automation -Name '*Info'
+
+    expected 'Get-Command' output types:
+
+        (gcm gcm).OutputType | % Type | Join-String -p { $_.ToString() } -sep "`n" -f '[{0}]' | Sort-Object -Unique
+
+        [System.Management.Automation.AliasInfo]
+        [System.Management.Automation.ApplicationInfo]
+        [System.Management.Automation.FunctionInfo]
+        [System.Management.Automation.CmdletInfo]
+        [System.Management.Automation.ExternalScriptInfo]
+        [System.Management.Automation.FilterInfo]
+        [System.String]
+        [System.Management.Automation.PSObject]
+    .example
+        # Externally test using this:
+        & ( ipmo Mintils -PassThru ) { _Resolve-DirectoryFromPathLike ( gcm Add-ExcelName ) -Debug }
+    #>
+    [CmdletBinding()]
+    param(
+        # File, Directory, PSModuleInfo, String, Etc
+        # Supports Types like: AliasInfo, ApplicationInfo, CmdletInfo, DirectoryInfo, ExternalScriptInfo, FileSystemInfo, FunctionInfo, PSModuleInfo, FilterInfo, String, etc...
+        [Alias('Object', 'InObj')]
+        [ValidateNotNull()]
+        [Parameter(Mandatory)]
+        $InputObject
+    )
+    $InputObject.GetType()
+        | Join-String -f 'enter => type: {0} ' | Write-Verbose
+
+    $return = [ordered]@{
+        PSTypeName = 'mintils.Resolved.Command.OtherInfo'
+    }
+    switch( $InputObject ) {
+        { $_ -is [System.Management.Automation.AliasInfo] } {
+            $return.PSTypeName = 'Mintils.Resolved.Command.AliasInfo'
+            [Management.Automation.CommandInfo] $ResolvedCmd = $InputObject.ResolvedCommand
+
+            $return  = _Resolve-CommandFileLocation -Inp $ResolvedCmd
+            if( -not $return ) {
+                throw "nyi $( $InputObject.GetType() ) "
+            }
+            break
+        }
+        { $_ -is [System.Management.Automation.ApplicationInfo] } {
+            $return.PSTypeName = 'Mintils.Resolved.Command.ApplicationInfo'
+            throw "nyi $( $InputObject.GetType() ) "
+            break
+        }
+        { $_ -is [System.Management.Automation.FunctionInfo] } {
+            [System.Management.Automation.FunctionInfo] $func = $_
+
+            $return.PSTypeName = 'Mintils.Resolved.Command.FunctionInfo'
+            $return.Name       = $func.Name
+            $return.ModuleName = $func.ModuleName
+            $return.Module     = $func.Module
+            $return.Source     = $func.Source
+            $return.FileExists = $false                                                   # ensures order before File
+            $return.File       = Get-Item -ea 'ignore' $func.ScriptBlock.Ast.Extent.File
+            $return.FileExists = $return.File -and (  Test-Path $return.file )
+            # if (-not $return.File ) {
+            #     'bad?' | Write-Host -fg purple
+            #     $null = 0
+            # }
+            $return.StartLineNumber      = $func.ScriptBlock.Ast.Extent.StartLineNumber
+            $return.EndLineNumber        = $func.ScriptBlock.Ast.Extent.EndLineNumber
+            $return.StartColumnNumber    = $func.ScriptBlock.Ast.Extent.StartColumnNumber
+            $return.EndColumnNumber      = $func.ScriptBlock.Ast.Extent.EndColumnNumber
+            $return.FunctionInfoInstance = $func
+
+            if( -not $return.FileExists ) {
+                $return.FileWithLineNumberString = '' # fix: convert to calculated property
+            } else {
+                $return.FileWithLineNumberString = '{0}:{1}:{2}' -f @(
+                    $return.File.FullName,
+                    $return.StartLineNumber
+                    $return.StartColumnNumber
+                )
+            }
+            $return.HelpFile = $func.HelpFile
+            $return.HelpUri  = $func.HelpUri
+            # $return = 'func'
+            break
+        }
+
+        { $_ -is [System.Management.Automation.CmdletInfo] } {
+            [System.Management.Automation.CmdletInfo] $Info = $InputObject
+
+            $return.PSTypeName         = 'Mintils.Resolved.Command.CmdletInfo'
+            $return.Name               = $Info.Name
+            $return.ImplementingType   = $Info.ImplementingType
+            $return.Namespace          = $Info.Namespace
+            $return.Source             = $Info.Source
+            $return.DLL                = $Info.DLL
+            $return.FileExists = $true # ensure order
+            $return.File               = Get-Item $info.DLL
+            $return.FileExists = Test-Path -ea ignore $return.File
+            $return.CmdletInfoInstance = $Info
+            # throw "nyi $( $InputObject.GetType() ) "
+            break
+        }
+        { $_ -is [System.Management.Automation.ExternalScriptInfo] } {
+            # $return = ''
+            $return.PSTypeName = 'Mintils.Resolved.Command.ExternalScriptInfo'
+            throw "nyi $( $InputObject.GetType() ) "
+            break
+        }
+        { $_ -is [System.Management.Automation.FilterInfo] } {
+            # $return = ''
+            $return.PSTypeName = 'Mintils.Resolved.Command.FilterInfo'
+            throw "nyi $( $InputObject.GetType() ) "
+            break
+        }
+        {
+            $_ -is [String] -and ( $nextGcm = Gcm $_ -ea ignore)
+        } {
+            # $return        = 'StrToGcm => {0} ' -f $nextGcm
+            $return  = _Resolve-CommandFileLocation -Inp $nextGcm
+            # $return.PSTypeNames -join ', '
+            throw "nyi $( $InputObject.GetType() ) "
+            # $return += ' , then => {0}' -f (  $nextResolved )
+            break
+        }
+        default {
+            throw ("Unhandled type: $( $InputObject.GetType() )")
+            break
+        }
+    }
+    [pscustomobject] $return
+}
+
 function _Resolve-DirectoryFromPathlike {
     <#
     .SYNOPSIS
@@ -149,6 +414,12 @@ function Find-MintilsAppCommand {
         Find-MintilsAppCommand 'npm', 'node', 'pwsh' | ft
     .example
         Find-MintilsAppCommand 'npm', 'node', 'pwsh' -FilterCommandType Application, ExternalScript
+    .link
+        Mintils\Find-MintilsAppCommand
+    .link
+        Mintils\Require-MintilsFileExists
+    .link
+        Mintils\Require-MintilsAppExists
     #>
     [Alias('Mint.Find-AppCommand')]
     [OutputType( 'Mintils.AppCommand.Info' )]
@@ -222,7 +493,7 @@ function Find-MintilsAppCommand {
 }
 
 function Find-MintilsFunctionDefinition {
-    <#
+    <#verbo
     .synopsis
         Find a function, then open vscode to that exact line number
     .NOTES
@@ -241,7 +512,7 @@ function Find-MintilsFunctionDefinition {
         gcm goto | EditFunc -PassThru -AsCommand
         gcm goto | EditFunc -AsCommand
     #>
-    [Alias('Mint.Find-FunctionDefinition', 'EditFunc')]
+    [Alias('Mint.Find-FunctionDefinition', 'EditFunc', 'Mint.Find-FuncDef' )]
     [OutputType( 'System.IO.FileInfo', 'System.Management.Automation.CommandInfo' )]
     [CmdletBinding()]
     param(
@@ -256,49 +527,60 @@ function Find-MintilsFunctionDefinition {
         [switch] $AsCommand
     )
     begin {
-        function CoerceCommand {
-            # Get filepath from command, scriptblock, alias, etc.
-            param(
-                [Parameter(Mandatory)] $Obj
-            )
-            if( $Obj -is [Management.Automation.AliasInfo] )  {
-                $resolve = Get-Command $Obj.Definition
-                $msg = '    => start: {0} of "{1}"' -f @(
-                    $resolve.ScriptBlock.Ast.Extent.StartLineNumber
-                    $resolve.ScriptBlock.File
-                )
-
-                $msg | New-Text -fg 'gray80' -bg 'gray30'
-                    # | Write-information # for now just write host, to simplify passing InfaAction or not
-                    | Write-Host
-
-                if( $AsCommand ) { return $Resolve }
-                return Get-Item $resolve.ScriptBlock.File
-            }
-            if( $Obj -is [Management.Automation.FunctionInfo] )  {
-                $Resolve = $Obj
-                $msg = '    => start: {0} of "{1}"' -f @(
-                    $resolve.ScriptBlock.Ast.Extent.StartLineNumber
-                    $resolve.ScriptBlock.File
-                )
-                $msg | New-Text -fg 'gray80' -bg 'gray30'
-                    # | Write-information # for now just write host, to simplify passing InfaAction or not
-                    | Write-Host
-
-                if( $AsCommand ) { return $Resolve }
-                return Get-Item $resolve.ScriptBlock.File
-            }
-            'Unhandled converting command path from type: {0}' -f $Obj.GetType().Name  | Write-Warning
-            return $Null
-        }
+        $binCode = Mint.Require-AppInfo -Name 'code'
+        write-warning 'WIP: New Find-Func implementation'
     }
-
     process {
-        $query = CoerceCommand -Obj $InputObject
-        foreach($Item in $query) {
-            if( $PassThru ) { return $item }
-            code --goto ( Get-Item -ea 'stop' $item.FullName )
+        $found = _Resolve-CommandFileLocation -InputObject $InputObject -Verbose
+        if( $PassThru ) { $found ; return ; }
+
+        $binArgs = @(
+            '--goto', $Found.FileWithLineNumberString
+        )
+
+        if( -not $PassThru ) {
+            $binArgs
+                | Join-String -sep ' ' -op '    invoke code => '
+                | Write-Host -fg 'gray80' -bg 'gray30'
         }
+
+        if( -not (Test-Path $found.File )) {
+            throw "Filepath not found for: $( $InputObject.GetType() )"
+        }
+
+        & $binCode @( '--goto', $Found.FileWithLineNumberString )
+        # throw "old logic starts here"
+        # $query = _Resolve-CommandFileLocation -InputObject $InputObject
+        # foreach($Item in $query) {
+        #     if( $PassThru ) { $item; continue; }
+        #     if( -not (Test-Path $Item.FullName ) ) {
+        #         $msg = '.FullName not found on Item: {0}' -f $Item
+        #         $msg | Write-Warning
+        #         $msg | write-error
+        #         continue
+        #     }
+        #     $binArgs = @(
+        #         '--goto'
+        #         ( Get-Item -ea 'stop' $item.FullName )
+        #     )
+
+        #     if( $item.StartLineNumber -and $item.Path ) {
+        #         $binArgs = @(
+        #             '--goto'
+        #             '{0}:{1}' -f @(
+        #                 Get-Item -ea 'stop' $Item.Path.FullName
+        #                 $item.StartLineNumber
+        #             )
+        #         )
+        #     }
+        #     if( -not $PassThru ) {
+        #         $binArgs
+        #             | Join-String -sep ' ' -op '    invoke code => '
+        #             | Write-Host -fg 'gray80' -bg 'gray30'
+        #     }
+
+        #     & $binCode @binArgs
+        # }
 
     }
 }
@@ -523,6 +805,9 @@ function Find-MintilsVsCodeWorkspace {
         Mintils\Find-MintilsWorkspace
     .link
         Mintils\Find-MintilsGitRepository
+    .link
+        Mint.Find-VsCodeWorkspace -IncludeVsCodeFolders
+        # outputs: .vscode' and '.code-workspace'
     #>
     [Alias(
         'Mint.Find-VsCodeWorkspace',
@@ -539,7 +824,12 @@ function Find-MintilsVsCodeWorkspace {
 
         # for: fd --max-depth <int>
         [Alias('Depth')]
-        [int] $MaxDepth = 5
+        [int] $MaxDepth = 5,
+
+
+        # Search includes for '.vscode' folders
+        [Alias('IncludeFolders')]
+        [switch] $IncludeVsCodeFolders
     )
     begin {}
     process {}
@@ -547,8 +837,13 @@ function Find-MintilsVsCodeWorkspace {
         $rootDir = Get-Item -ea 'stop' $BaseDirectory
         "Depth: ${MaxDepth}, Extension: 'code-workspace', Root: ${RootDir}" | Write-Verbose
         $pathSeparator = '/'
-        fd --max-depth 7 --type 'file' -e 'code-workspace' --absolute-path --path-separator $pathSeparator --base-directory $rootDir
+        fd --max-depth $MaxDepth --type 'file' -e 'code-workspace' --absolute-path --path-separator $pathSeparator --base-directory $rootDir
             | Get-Item -ea 'continue'
+
+        if( $IncludeVscodeFolders ) {
+            fd --max-depth $MaxDepth --type 'directory' '\.vscode' --absolute-path --path-separator $pathSeparator --base-directory $rootDir --hidden
+                | Get-Item -ea 'continue'
+        }
     }
 }
 
@@ -632,56 +927,6 @@ function Format-MintilsConsoleFileUri {
     }
 }
 
-function Write-MintilsConsoleHeader {
-    <#
-    .synopsis
-        Write a markdown header, or a <h1> with color
-    .description
-        Writes a console header like markdown. Or returns so that you can pipe it elsewhere.
-    .EXAMPLE
-        > 'hi world' | Mint.Write-H1 # Default writes to Host
-        > 'hi world' | Mint.Write-H1 -fg 'gray40' -bg 'gray30'
-    .example
-        # Write Colors to another stream: Verbose/ Write-Information, etc.
-        # without Write-Host
-        > $msg = 'Log Start: {0}' -f (Get-Date) | Mint.Write-H1 -PassThru
-        > $msg | Write-Verbose -Verbose
-        > $msg | Write-Information -infa Continue
-    #>
-    [Alias('Mint.Write-ConsoleHeader', 'Mint.Write-H1')]
-    # OutputType: always [Void], except when using -PassThru: output is [PoshCode.Pansies.Text]
-    [CmdletBinding()]
-    param(
-        [Alias('Name', 'Label')]
-        [Parameter(Mandatory, ValueFromPipeline)]
-        [string] $Text,
-
-        # Text before your header text, or ' ## '
-        [string] $PrefixText = ' ## ',
-
-        # Text after your header text, or ' ## '
-        [string] $SuffixText = ' ## ',
-
-        # Returns the (New-Text) result instead of writing to the console/Host
-        [switch] $PassThru,
-
-        # accepts [RgbColor] or Null, otherwise the default color
-        [Alias('Fg')]
-        [RgbColor] $ForegroundColor = 'PaleVioletRed2',
-
-        # accepts [RgbColor] or Null, otherwise the default color
-        [Alias('Bg')]
-        [RgbColor] $BackgroundColor = 'SlateBlue4'
-    )
-    process {
-
-        $render = "${PrefixText}${Text}${SuffixText}"
-        $obj = $render | Pansies\New-Text -fg $ForegroundColor -bg $BackgroundColor
-        if( $PassThru ) { return $obj }
-        $obj | Pansies\Write-Host
-    }
-}
-
 function Format-MintilsConsoleHyperlink {
    <#
    .synopsis
@@ -743,14 +988,23 @@ function Format-MintilsRelativePath {
     <#
     .synopsis
         Sugar that converts paths relative a base dir
+    .example
+        # Print paths relative the current Directory
+        gci . -Depth 2 | Mint.Format-RelativePath
+    .example
+        > Get-Item 'H:\github_fork\Pwsh\SeeminglyScience👨\EditorServicesProcess', 'H:\github_fork\Pwsh\Trackd👨'
+            | Mint.Format-RelativePath 'H:\github_fork\Pwsh'
+
+        SeeminglyScience👨\EditorServicesProcess
+        Trackd👨
     #>
     [Alias('Mint.Format-RelativePath')]
-    # [OutputType( [string], 'Mintils.RelativePath' )]
+    [OutputType( [string] )]
     [CmdletBinding()]
     param(
         [Alias('BasePath')]
-        [Parameter(Mandatory, Position = 0)]
-        $RelativeTo,
+        [Parameter(Position = 0)]
+        $RelativeTo = '.',
 
         # Strings / paths to convert
         [Alias('PSPath', 'FullName', 'InObj')]
@@ -762,10 +1016,11 @@ function Format-MintilsRelativePath {
         [switch] $AsObject
     )
     process {
-        foreach( $item in $Path ) {
+        $RelativeTo = Get-Item $RelativeTo
+        foreach( $item in ( $Path | Convert-Path ) ) {
             $relPath = [System.IO.Path]::GetRelativePath(
                 <# string: relativeTo #> $RelativeTo,
-                <# string: path  #>  $Item )
+                <# string: path #>  $Item )
 
             if( -not $AsObject ) {
                 $relPath
@@ -779,10 +1034,8 @@ function Format-MintilsRelativePath {
                 }
                 continue
             }
-
         }
     }
-
 }
 
 
@@ -942,6 +1195,95 @@ function Format-MintilsTextPredent {
     }
     end {
         $lines | Join-String -f "${Prefix}{0}" -Sep $Separator
+    }
+}
+
+function Get-MintilsExecutionContextCommandName {
+    <#
+    .SYNOPSIS
+        sugar that wraps "$ExecutionContext.InvokeCommand.GetCommandName"
+    .notes
+        Maybe allow returning (Get-Item) as an option
+    .example
+        > Mint.ExContext.Get-CommandName -Name py
+        # py.exe
+    .EXAMPLE
+        > 'py', 'fd', 'dsf' | Mint.ExContext.Get-CommandName
+    .link
+        Mintils\Mint.ExecutionContext-Get-CommandName
+    .link
+        Mintils\Mint.ExecutionContext.Get-CommandNames
+    .link
+        System.Management.Automation.CommandInvocationIntrinsics
+    #>
+    [Alias(
+        'Mint.ExecutionContext.Get-CommandName',
+        'Mint.ExContext.Get-CommandName'
+    )]
+    [CmdletBinding()]
+    [OutputType( [Management.Automation.CommandInfo], [string] )]
+    param(
+        [Parameter(mandatory, ValueFromPipeline)]
+        [string] $Name,
+        [switch] $NameIsPattern,
+
+        # output filepath as name only
+        [switch] $AsText
+    )
+    process {
+        $query = $ExecutionContext.InvokeCommand.
+            GetCommandName( $Name, $NameIsPattern, $true )
+        if( $query.count -eq 0 ) { return }
+
+        if( $asText ) { return $query }
+
+        Get-Command ( $Query | Get-Item )
+    }
+}
+
+function Get-MintilsExecutionContextCommands {
+    <#
+    .SYNOPSIS
+        sugar that wraps "$ExecutionContext.InvokeCommand.GetCommands"
+    .notes
+        Maybe allow returning (Get-Item) as an option
+    .example
+        # default is all types
+        > 'git' | Mint.ExContext.Get-Commands
+
+        # limit to applications / not functions
+        > 'git' | Mint.ExContext.Get-Commands -CommandTypes Application
+    .example
+        # wildcard search
+        > Mint.ExContext.Get-Commands -Name '*git*' -NameIsPattern |ft
+    .link
+        Mintils\Mint.ExecutionContext-Get-CommandName
+    .link
+        Mintils\Mint.ExecutionContext.Get-Commands
+    .link
+        System.Management.Automation.CommandInvocationIntrinsics
+    #>
+    [Alias(
+        'Mint.ExecutionContext.Get-Commands',
+        'Mint.ExContext.Get-Commands'
+    )]
+    [OutputType( [Management.Automation.CommandInfo] )]
+    [CmdletBinding()]
+    # [OutputType( [Collections.Generic.List[String]] )]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [string] $Name,
+
+        [Management.Automation.CommandTypes] $CommandTypes = 'All', # all
+
+        # name uses wildcard pattern, otherwise exact match
+        [switch] $NameIsPattern
+    )
+    process {
+        $ExecutionContext.InvokeCommand.GetCommands(
+            <# string #> $Name,
+            <# CommandTypes #> $CommandTypes,
+            <# bool #> $NameIsPattern )
     }
 }
 
@@ -1474,6 +1816,191 @@ function Get-MintilsVariableSummary {
         | Sort-Object -Property Name
 }
 
+function Get-MintilsTextStyle {
+    <#
+    .SYNOPSIS
+        Get text colors by style name
+    .example
+        # Show all defined styles
+        > Mint.Get-TextStyle -ListAll | ft
+    .example
+        # Get matching <Name> or first match using -like <Name>
+        > Mint.Get-TextStyle Gray
+    .example
+        # Get strict matches only
+        > Mint.Get-TextStyle Gray -ExactOnly -Verbose
+
+        VERBOSE: ambigous styles found!: Gray.Bright.BoldContrast, Gray.Dark.LowContrast
+        Exception: Strict match Name: 'Gray' failed, found 2 matches!
+    #>
+    [Alias(
+        'Mint.Get-TextStyle'
+        # 'Mint.TextStyle'
+    )]
+    [CmdletBinding()]
+    param(
+        # Select first matching pattern
+        [Parameter(Mandatory, ParameterSetName='ByNameLookup', Position = 0 )]
+        [Alias('Name', 'ByName', 'Theme')]
+        [string] $StyleName,
+
+        # only select one exact match
+        [Parameter(ParameterSetName='ByNameLookup')]
+        [Alias('Strict', 'ExactOnly')]
+        [switch] $OneOrNone,
+
+        [Parameter(Mandatory, ParameterSetName='ByListAll')]
+        [Alias('All', 'List')]
+        [switch] $ListAll
+    )
+
+    switch( $PSCmdlet.ParameterSetName ) {
+        'ByNameLookup' {
+            $splat = @{
+                ByName    = $StyleName
+                OneOrNone = $OneOrNone
+            }
+            _Get-TextStyle @splat
+        }
+        'ByListAll' {
+            _Get-TextStyle -ListAll
+        }
+        default {
+            throw "Unhandled ParameterSetName: '$( $PSCmdlet.ParameterSetName )' !"
+        }
+    }
+}
+
+function Invoke-MintilsAppVsCode {
+    <#
+    .synopsis
+        Opens VS Code
+    .description
+    .example
+        > $Profile | Get-Item | Mint.Invoke-App.VsCode
+        > $Profile | Get-Item | Mint.VsCode
+    .link
+        https://code.visualstudio.com/docs/configure/command-line
+    #>
+    [CmdletBinding()]
+    [Alias(
+        'Mint.Invoke-App.VsCode',
+        'Mint.VsCode'
+    )]
+    [CmdletBinding()]
+    param(
+        [ValidateNotNull()]
+        [Alias('PSPath', 'Path')]
+        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [object] $InputObject,
+
+        # show dynamic help
+        [Alias('Help')]
+        [switch] $ShowHelp,
+
+        # Log what would be opened, but does not run 'code'
+        [Alias('TestOnly')]
+        [switch] $WhatIf,
+
+        # write file names to console
+        [switch] $PSHost,
+
+        # Jump to the last line using relative line number instead
+        [ValidateScript({throw 'nyi'})]
+        [switch] $GotoEnd
+    )
+    begin {
+        if( $ShowHelp ) {
+            & ( Mint.Require-App 'code' ) @( '--help' )
+            New-HyperLink -Text 'docs: vscode commandline' -Uri 'https://code.visualstudio.com/docs/configure/command-line'
+        }
+    }
+    process {
+        if( $ShowHelp ) { return }
+
+        # Attempt to convert input to filepath
+        $file = Get-Item -ea 'ignore' $InputObject
+
+        # or, grab filepath from a command type
+        if( -not $File ) {
+            $maybe_funcDef = Mint.Find-FunctionDefinition -PassThru -InputObject $InputObject
+            if( Test-Path -ea Ignore $maybe_funcDef.File ) {
+                $file = Get-Item -ea ignore $maybe_funcDef.File
+             }
+        }
+
+        if( -not $File ) {
+            'File did not exist for type: ' -f ( ( $InputObject )?.GetType() )
+                | Write-Error
+            return
+        }
+
+        $binArgs = @(
+            '--goto'
+            $File.FullName
+        )
+        $render_args = $binArgs | Join-String -sep ' ' -op 'invoke "code" => '
+        $render_args | Write-Verbose
+        if( $WhatIf -or $PSHost ) {
+            $render_args | Write-Host -fg 'gray70' -bg 'gray30'
+        }
+
+        if( $WhatIf ) { return }
+
+        if( Test-Path $File ) {
+            & ( Mint.Require-App 'code' ) @BinArgs
+        }
+    }
+    end { }
+}
+
+function New-MintilsHashSetFileSystemInfo {
+    <#
+    .SYNOPSIS
+        return a New hashset for type: [FileSystemInfo] with Case-Insensitive comparisons
+    .example
+        > $Collection = @( $Env:Path -split [IO.Path]::PathSeparator  -as [IO.DirectoryInfo[]] )
+        > $set = _New-HashSet.FileSystemInfo -Collection $Collection
+        > $Collection.count, $set.count
+    #>
+    [Alias(
+        'New-MintilsHashSet.FileInfo',
+        'Mint.New-HashSet.FileInfo'
+    )]
+    [CmdletBinding()]
+    [OutputType( [System.Collections.Generic.HashSet[System.IO.FileSystemInfo]] )]
+    param(
+        [Alias('InputObject', 'Fullname', 'Path')]
+        [System.IO.FileSystemInfo[]] $Collection = @(),
+        # [System.IO.FileSystemInfo[]] $Collection = @(),
+
+        # future, will need the option
+        [ValidateScript({throw 'nyi'})]
+        [switch] $UsingCaseSensitive
+    )
+
+    $Comparer = [Collections.Generic.EqualityComparer[IO.FileSystemInfo]]::Create(
+            <# equals: #>      { param( $x, $y ) $x.FullName -eq $y.FullName },
+            <# getHashCode: #> { param( $x ) [StringComparer]::OrdinalIgnoreCase.GetHashCode( $x.FullName ) } )
+
+    if( $Collection.count -gt 0 ) {
+        $Set = [Collections.Generic.HashSet[IO.FileSystemInfo]]::new(
+            <# collection: #> [IO.FileSystemInfo[]] $Collection,
+            <# comparer: #>   $Comparer )
+    } else {
+        # todo: fix: still not returning empty set as expected.
+        # I am manually calling the other ctor, otherwise the above ctor fails with by returning $Null instead of empty set
+        # or, maybe is calling the other overload ?
+        $Set = [Collections.Generic.HashSet[IO.FileSystemInfo]]::new( <# comparer: #> $Comparer )
+    }
+    if( $Null -eq $Set ) {
+        throw "_New-HashSet.FileSystemInfo: Something failed creating HashSet[FileSystemInfo] !"
+    }
+
+    $hs.GetType() | Join-String -op 'Warn!: Is now returning an array: to fix! typeof: ' | write-host -fg coral
+    return $Set
+}
+
 function New-MintilsRegexOrExpression {
    <#
    .synopsis
@@ -1742,6 +2269,148 @@ function Quick-MintilsFilterByPropertyValue {
     }
 }
 
+
+function Require-MintilsAppExists {
+    <#
+    .SYNOPSIS
+        Require [ApplicationInfo] exists. Returns one match. They can come from many extension types / *.exe, *.cmd, *.py, .sh, etc...
+    .notes
+        If you want an *.exe or *.cmd from Get-Command,
+        [ApplicationInfo] works best, It's cross platform. And isn't hardcoded to a specific extension.
+    .example
+        > $binPy = Mint.Require-AppInfo py
+        > & $binPy '--version'
+        # 'If the command is missing, it quits before this line'
+    .example
+        # Silly, but it works
+        > & ( Mint.Require-AppInfo py ) '--version'
+        > & ( Mint.Require-AppInfo fd ) @( '-e', 'ps1', '--newer', '2days' )
+    .link
+        Mintils\Find-MintilsAppCommand
+    .link
+        Mintils\Require-MintilsFileExists
+    .link
+        Mintils\Require-MintilsAppExists
+    #>
+    [CmdletBinding()]
+    [OutputType( [Management.Automation.ApplicationInfo] )]
+    [Alias(
+        'Mint.Require-App',
+        'Mint.Require-AppInfo' )]
+    param(
+        [Parameter(Mandatory)]
+        [object] $Name
+    )
+    [Management.Automation.ApplicationInfo] $App = Mint.ExecutionContext.Get-Commands -Name $Name | Select-Object -First 1
+    if ( -not $App ) {
+        $msg = "Application '$Name' not found in PATH."
+        $err =
+            [Management.Automation.ErrorRecord]::new(
+                [System.Exception]::new( $msg ),
+                'Mintils.Require-AppExists.AppNotFound',
+                [Management.Automation.ErrorCategory]::ObjectNotFound,
+                $Name
+            )
+        throw $err # $PSCmdlet.ThrowTerminatingError( $err )
+    }
+    $App
+}
+
+
+function Require-MintilsDirectoryExists {
+    <#
+    .SYNOPSIS
+        Create a folder if not existing, and return (get-Item) of it. Throw on read/write errors
+    .DESCRIPTION
+        - If a folder exists, return it using (Get-Item)
+        - If missing, attempt to create it.
+    .example
+        $AppConf = @{
+            AppRoot = ( $AppRoot = Get-Item $PSScriptRoot )
+            Export  = Mint.Require-Directory -Confirm -Path (Join-Path $AppRoot 'export')
+        }
+    #>
+    [OutputType( [System.IO.DirectoryInfo] )]
+    [Alias(
+        'Mint.Require-Directory' )]
+    param(
+        [Alias('PSPath', 'Directory')]
+        [Parameter(Mandatory)]
+        [object] $Path,
+
+        # prompt for creating new files/folders. calls New-Item with -Confirm
+        [switch] $Confirm,
+
+        # By default, create directory if missing
+        [switch] $WithoutCreate,
+
+        # By default, New-Item uses -Force
+        [switch] $WithoutForce
+    )
+    $Resolved = Get-Item -ea 'ignore' $Path
+    if( $Resolved -is [System.IO.DirectoryInfo] ) {
+        return $Resolved
+    }
+    if( $Resolved.PSIsContainer ) {
+        return $Resolved
+    }
+
+    if( $WithoutCreate -and -not ( Test-Path $Resolved ) ) {
+        throw "Directory does not exist: '${Path}' ! WithoutCreate: ${WithoutCreate}, withoutForce ${WithoutForce}"
+    }
+
+    try {
+        $newPath = mkdir -Path $Path -Confirm:$( $Confirm ) -ev 'evMkdir' -ea 'stop' -Force:$( -not $WithoutForce )
+        if( Test-Path $newPath ) {
+            return $newPath
+        }
+    } catch {
+        if( $_.Exception.Message -match 'item with the.*name.*exists' ) {
+            "Item already exists: '${Path}'" | Write-Verbose
+        } else {
+            throw
+        }
+    }
+    throw "Failed resolving directory: '${Path}' !"
+}
+
+
+function Require-MintilsFileExists {
+    <#
+    .SYNOPSIS
+        Create file if not existing, and return (get-Item) of it. Throw on read/write errors
+    #>
+    [OutputType( [System.IO.FileInfo] )]
+    [Alias(
+        'Mint.Require-File' )]
+    param(
+        [Parameter(Mandatory)]
+        [object] $Path,
+
+        # New-Item -Force is on by default
+        # # By default, New-Item uses -Force
+        [switch] $WithoutForce,
+
+        # By default, create file if missing
+        [switch] $WithoutCreate,
+
+        # prompt when if creating new files/folders. calls New-Item with -Confirm
+        [switch] $Confirm
+    )
+    $Resolved = Get-Item -ea 'ignore' $Path
+    if( $Resolved -is [System.IO.FileInfo] ) {
+        return $Resolved
+    }
+    if( $WithoutCreate -and -not ( Test-Path $Path ) ) {
+        throw "Directory does not exist: '${Path}' ! WithoutCreate: ${WithoutCreate}, withoutForce ${WithoutForce}"
+    }
+    $newItem = New-Item -Path $Path -ItemType File -Confirm:$( $Confirm ) -ea 'stop' -Force:$( -not $WithoutForce ) -ev 'evNewItem'
+    if( $newItem -and ( Test-Path $newItem ) ) {
+        return $newItem
+    }
+    throw "File was not created! '${Path}' ! WithoutCreate: ${WithoutCreate}, withoutForce ${WithoutForce}"
+}
+
 function Select-MintilsObject {
     <#
     .synopsis
@@ -1855,5 +2524,93 @@ function Select-MintilsRandomObject {
         if( $setSeed ) { $splat.SetSeed = $setSeed }
         Get-Random @splat # -InputObject $items -Count $MaxCount # -SetSeed
     }
+}
+
+function Write-MintilsConsoleHeader {
+    <#
+    .synopsis
+        Write a markdown header, or a <h1> with color
+    .description
+        Writes a console header like markdown. Or returns so that you can pipe it elsewhere.
+    .EXAMPLE
+        > 'hi world' | Mint.Write-H1 # Default writes to Host
+        > 'hi world' | Mint.Write-H1 -fg 'gray40' -bg 'gray30'
+    .example
+        # Write Colors to another stream: Verbose/ Write-Information, etc.
+        # without Write-Host
+        > $msg = 'Log Start: {0}' -f (Get-Date) | Mint.Write-H1 -PassThru
+        > $msg | Write-Verbose -Verbose
+        > $msg | Write-Information -infa Continue
+    #>
+    [Alias('Mint.Write-ConsoleHeader', 'Mint.Write-H1')]
+    # OutputType: always [Void], except when using -PassThru: output is [PoshCode.Pansies.Text]
+    [CmdletBinding()]
+    param(
+        [Alias('Name', 'Label')]
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [string] $Text,
+
+        # Text before your header text, or ' ## '
+        [string] $PrefixText = ' ## ',
+
+        # Text after your header text, or ' ## '
+        [string] $SuffixText = ' ## ',
+
+        # Returns the (New-Text) result instead of writing to the console/Host
+        [switch] $PassThru,
+
+        # accepts [RgbColor] or Null, otherwise the default color
+        [Alias('Fg')]
+        [RgbColor] $ForegroundColor = 'PaleVioletRed2',
+
+        # accepts [RgbColor] or Null, otherwise the default color
+        [Alias('Bg')]
+        [RgbColor] $BackgroundColor = 'SlateBlue4',
+
+        # number of newlines to prefix, and suffix the header with. otherwise none. ( when -not $PassThru ). Default is 0.
+        [int] $PadBothLines = 0
+    )
+    process {
+
+        $render = "${PrefixText}${Text}${SuffixText}"
+        $obj = $render | Pansies\New-Text -fg $ForegroundColor -bg $BackgroundColor
+        if( $PassThru ) { return $obj }
+
+        if( -not $PadBothLines ) {
+            $obj | Pansies\Write-Host
+        } else {
+            $Pad = "`n" * $PadBothLines -join ''
+            $Obj| Join-String -f "${Pad}{0}${Pad}"
+                | Pansies\Write-Host
+        }
+    }
+}
+
+function Write-MintilsLineEnding {
+    <#
+    .SYNOPSIS
+        emits n-number of newlines as one string. Sugar for scripts to write n-number of line endings. ( Without explicit write-host )
+    .example
+        > "foo"; Mint.Write-NL; "Foo";
+        > Mint.Write-NL 2
+        > Mint.Write-H1 'foo'; Mint.Write-NL 4; Mint.Write-H1 'bar';
+    #>
+    [Alias( 'Mint.Write-ConsoleLineEnding', 'Mint.Write-NL' )]
+    [OutputType( [string] )]
+    [CmdletBinding()]
+    param(
+        # Number of lines. Default: 1
+        [Parameter(Position = 0)]
+        [uint] $NumberOfLines = 1,
+
+        # Override the default line endings: '\n'
+        [Parameter(Position = 1)]
+        [ArgumentCompletions( '"`n"', '"`r`n"', "'␊'" )]
+        [string] $LineEndingString = "`n"
+    )
+
+    if( $NumberOfLines -eq 0 ) { return }
+    $render = $LineEndingString * $NumberOfLines -join ''
+    $render
 }
 
