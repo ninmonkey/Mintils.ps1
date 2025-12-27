@@ -18,7 +18,7 @@
         gcm goto | EditFunc -PassThru -AsCommand
         gcm goto | EditFunc -AsCommand
     #>
-    [Alias('Mint.Find-FunctionDefinition', 'EditFunc')]
+    [Alias('Mint.Find-FunctionDefinition', 'EditFunc', 'Mint.Find-FuncDef' )]
     [OutputType( 'System.IO.FileInfo', 'System.Management.Automation.CommandInfo' )]
     [CmdletBinding()]
     param(
@@ -37,7 +37,7 @@
         write-warning 'WIP: New Find-Func implementation'
     }
     process {
-        $found = _ResolveCommandFileLocation -InputObject $InputObject -Verbose
+        $found = _Resolve-CommandFileLocation -InputObject $InputObject -Verbose
         if( $PassThru ) { $found ; return ; }
 
         $binArgs = @(
