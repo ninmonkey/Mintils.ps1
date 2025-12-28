@@ -34,16 +34,19 @@ function _Invoke-App.VsCode {
         [string] $FileWithLineNumberString,
 
         # Read piped text instead of a file
-        [ValidateScript({throw 'nyi'})]
+        [ValidateScript({throw 'nyi: to simplify impl without pipeline'})]
         [switch] $FromStdIn,
 
+        # is => code --goto <file:line[:character]>
         [Parameter()]
         [object] $GotoFile,
 
+        # is => code --add <folder>
         [Alias('Add')]
         [Parameter()]
         [object] $AddDirectory,
 
+        # is => code --add <folder>
         [Alias('Remove')]
         [Parameter()]
         [object] $RemoveDirectory,
@@ -112,8 +115,57 @@ function _Invoke-App.VsCode {
         # cmd: "code --user-data-dir <dir>". Specifies the directory that user data is kept in. Can be used to open multiple distinct instances of Code.
         [string] $UserDataDir,
 
+        # is => code --install-extension <id | path>.
+        # Installs or updates an extension. The argument is either an extension id or a path to a VSIX. The identifier of an extension is '${publisher}.${name}'. Use '--force' argument to update to latest version. To install a specific version provide '@${version}'. For example: 'vscode.csharp@1.2.3'.
+        # use with: --force, --profile
+        [ArgumentCompletions(
+            "'c:\foo\bar.vsix'",
+            "'publisher.name'", "'publisher.name@1.2.3'" )]
+        [string] $InstallExtension,
+
+        # is => code --uninstall-extension <id>
+        [ArgumentCompletions( "'publisher.name'", "'publisher.name@1.2.3'" )]
+        [string] $UninstallExtension,
+
+        # install pre-release extensions
+        # is => code --pre-release
+        [switch] $EnablePreReleaseExtension,
+
+        # skip prompts. install extensions, etc.
+        # is => code --force <extension>; ex: vscode.csharp@1.2.3;
+        # use with: --list-extensions;
+        [switch] $UsingForce,
+
+        # is => code --extensions-dir <dir>
+        [string] $ExtensionsDir,
+
+        # is => code --list-extensions
+        [switch] $ListExtensions,
+
+        # use with: --list-extensions; is => code --list-extensions --category <category>
+        # blank means show them. But only if explicitly passed
+        [ArgumentCompletions("''")]
+        [string] $FilterListExensionsCategory,
+
+        # is => code --list-extensions --show-versions
+        [switch] $ShowVersions,
+
         # cmd: "code --profile <name>".  Opens the provided folder or workspace with the given profile and associates the profile with the workspace. If the profile does not exist, a new empty one is created.
-        [string] $Profile
+        [string] $Profile,
+
+        [ArgumentCompletions("'publisher.extension'")]
+        [string] $EnableProposedAPI,
+
+        # is => code --inspect-extensions <port>
+        [int] $InspectExtensionsPort,
+
+        # Allow debugging and profiling of extensions with the extension host being paused after start. Check the developer tools for the connection URI.
+        # is => code --inspect-brk-extensions <port>
+        [int] $InspectExtensionsBreakpointPort,
+
+        # Add a ShouldProcess -Confirm after showing built cli args
+        [ValidateScript({throw 'nyi'})]
+        [switch] $Confirm
     )
     begin {}
     end {
@@ -141,13 +193,13 @@ function _Invoke-App.VsCode {
             $OptionsArgs.Add( '--disable-gpu' )
         }
         if( $Sync ) {
-            $OptionsArgs.Add( '--sync', $Sync )
+            $OptionsArgs.AddRange(@( '--sync', $Sync ))
         }
         if( $ProfileStartup ) {
-            $OptionsArgs.Add( '--sync', $Sync )
+            $OptionsArgs.Add( '--prof-startup' )
         }
         if( $DisableExtensions ) {
-            $OptionsArgs.Add( '--sync', $Sync )
+            $OptionsArgs.Add( '--disable-extensions' )
         }
         if( $NewWindow ) {
             $OptionsArgs.Add( '--new-window' )
@@ -158,6 +210,9 @@ function _Invoke-App.VsCode {
         if( $Wait ) {
             $optionsArgs.Add( '--wait' )
         }
+        if( $EnablePreReleaseExtension ) {
+            $optionsArgs.Add( '--pre-release' )
+        }
         if( $Locale ) {
             $optionsArgs.AddRange(@( '--locale', $Locale ))
         }
@@ -167,8 +222,57 @@ function _Invoke-App.VsCode {
         if( $Profile ) {
             $optionsArgs.AddRange(@( '--profile', $Profile ))
         }
+        if( $ExtensionsDir ) {
+            $optionsArgs.AddRange(@( '--extensions-dir', $ExtensionsDir ))
+        }
+        if( $InspectExtensionsPort ) {
+            $optionsArgs.AddRange(@( '--inspect-extensions', $InspectExtensionsPort ))
+        }
+        if( $InspectExtensionsBreakpointPort ) {
+            $optionsArgs.AddRange(@( '--inspect-brk-extensions', $InspectExtensionsBreakpointPort ))
+        }
+        if( $EnableProposedAPI ) {
+            $optionsArgs.AddRange(@(
+                '--enable-proposed-api'
+                $EnableProposedAPI
+            ))
+        }
 
         <# modal modes, that requires a clear/reset $BinArgs #>
+        if( $ListExtensions ) {
+            $binArgs = @(
+                $OptionsArgs
+                '--list-extensions'
+                if( $ShowVersions ) { '--show-versions' }
+
+                # if blank, list possible extension categories
+                if( $FilterListExensionsCategory -or
+                    $PSBoundParameters.ContainsKey('FilterListExensionsCategory')
+                ) {
+                    "--category={0}" -f @(  $FilterListExensionsCategory )
+                }
+            )
+        }
+        if( $UpdateExtensions )  {
+            $binArgs = @(
+                $OptionsArgs
+                '--update-extensions'
+            )
+        }
+        if( $InstallExtension )  {
+            $binArgs = @(
+                $OptionsArgs
+                '--install-extension'
+                $InstallExtension
+            )
+        }
+        if( $UninstallExtension )  {
+            $binArgs = @(
+                $OptionsArgs
+                '--uninstall-extension'
+                $InstallExtension
+            )
+        }
         if( $FileWithLineNumberString ) {
             $binArgs = @(
                 $OptionsArgs
