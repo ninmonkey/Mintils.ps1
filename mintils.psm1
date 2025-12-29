@@ -1,3 +1,55 @@
+
+function _Coerce.FileSystemInfo.FromString {
+    <#
+    .synopsis
+        [internal] Converts string to the best
+    .notes
+    - [ ] todo: verify '-as' errors emit from module to user scope from "Mint.New-hashset.FileInfo -Collection <string>"
+    - [ ] profile whether skipping (Get-Item) is significantly faster when piping large volumes.
+        if yes,
+            - [ ] Add -FromDirectoryString -FromFileString to explicity set the type
+            - [ ] or -SkipGetItemCheck as a parameter
+    .example
+        > 'c:\foo\bar', $Profile, $Profile.ToString(), (Get-Item '.'), (Get-Item $Profile),
+            | _Coerce.FileSystemInfo.FromString
+    #>
+    [OutputType( [System.IO.FileInfo], [System.IO.DirectoryInfo] )]
+    [CmdletBinding()]
+    param(
+        [Parameter( Mandatory, ValueFromPipeline )]
+        [string[]] $InputObject
+    )
+    process {
+        foreach( $Str in $InputObject ) {
+            if( $null -eq $Str ) { continue }
+
+            if( $Item = Get-Item -ea 'ignore' $Str  ) {
+                $Item
+                continue
+            }
+
+            if( Test-Path $Str -PathType Leaf ) {
+                $Item = $Str -as [IO.FileInfo]
+                if( $null -ne $Item ) {
+                    $item
+                    continue
+                }
+            }
+
+            $item = $Str -as [IO.DirectoryInfo]
+            if( $null -ne $Item ) {
+                $item
+                continue
+            }
+
+            if( $null -eq $item ) {
+                "Failed Coercing string to [IO.DirectoryInfo] or [IO.FileInfo]! From Input = '{0}'" -f $Str
+                    | Write-Error
+            }
+        }
+    }
+}
+
 function _Get-TextStyle {
     <#
     .SYNOPSIS
@@ -59,6 +111,14 @@ function _Get-TextStyle {
             SemanticName = 'Warning.NoBg'
             Description = @( 'Dim warning text.', 'Low severity warnings.', 'Fg: yellow, Bg: null.' ) -join ' '
             Fg = '#ebcb8b'
+            Bg = $Null
+            Category = 'Core'
+        }
+        @{
+            Name = 'DimGood'
+            SemanticName = 'Good.NoBg'
+            Description = @( 'Good text.', 'Fg: Light Green, Bg: null.' ) -join ' '
+            Fg = '#a2bb91'
             Bg = $Null
             Category = 'Core'
         }
@@ -124,6 +184,345 @@ function _Get-TextStyle {
             throw "Unhandled ParameterSetName: '$( $PSCmdlet.ParameterSetName )' !"
         }
     }
+}
+
+# remove the majority of this implementation from the repo
+function _Invoke-App.VsCode {
+    <#
+    .SYNOPSIS
+        [internal] lower level VS Code wrapper. No error handling.
+    .description
+        Internal version. Minimal error handling,
+
+        for the user-facing version with error handling
+            see: Mint.Invoke-App.VsCode
+
+        Not using ParameterSets because of the complexity, and future parameters
+    .notes
+    --log <level>
+
+        Allowed values are 'critical', 'error', 'warn', 'info', 'debug', 'trace', 'off'.
+
+        You can also configure the log level of an extension by passing
+        extension id and log level in the following format:
+            '${publisher}.${name}:${logLevel}'.
+
+            For example: 'vscode.csharp:trace'.
+    .example
+        # quick testing
+        > & ( ipmo Mintils -PassThru -Force ) {
+            _Invoke-App.VsCode -Version -verbose -LogLevel info -WhatIf
+            | Join-String -sep ' ' | write-host -fg salmon }
+    .link
+        Mint\Mint.Invoke-App.VsCode
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(ValueFromPipelineByPropertyName)]
+        [string] $FileWithLineNumberString,
+
+        # Read piped text instead of a file
+        [ValidateScript({throw 'nyi: to simplify impl without pipeline'})]
+        [switch] $FromStdIn,
+
+        # is => code --goto <file:line[:character]>
+        [Parameter()]
+        [object] $GotoFile,
+
+        # is => code --add <folder>
+        [Alias('Add')]
+        [Parameter()]
+        [object] $AddDirectory,
+
+        # is => code --add <folder>
+        [Alias('Remove')]
+        [Parameter()]
+        [object] $RemoveDirectory,
+
+        # Outputs BinArgs commands as [List[object]]
+        [Alias('TestOnly')]
+        [switch] $WhatIf,
+
+        # writes log to console
+        [switch] $VerboseLog,
+        [switch] $Version,
+
+        [ValidateScript({throw 'nyi'})]
+        [ArgumentCompletions('chat', 'serve-web', 'tunnel')]
+        [string] $SubCommand,
+
+        [ArgumentCompletions('bash', 'pwsh', 'zsh', 'fish')]
+        [string] $LocateShellIntegrationPath,
+
+        <#
+        Log level to use. Default: info.
+        Allowed values are 'critical', 'error', 'warn', 'info', 'debug', 'trace', 'off'.
+
+        You can also configure the log level of an extension by passing
+        extension id and log level in the following format:
+            '${publisher}.${name}:${logLevel}'.
+
+        For example: 'vscode.csharp:trace'.
+        #>
+        [ArgumentCompletions(
+            'critical', 'error', 'warn', 'info', 'debug', 'trace', 'off',
+            "'publisher.name:severity'" )]
+        [string] $LogLevel,
+
+        [switch] $Status,
+        [switch] $Transient,
+        [switch] $Telemetry,
+        [switch] $DisableGPU,
+
+        [switch] $ProfileStartup,
+        [switch] $DisableExtensions,
+
+        # force a new window
+        [switch] $NewWindow,
+
+        # Force open a file or folder in an existing window
+        [switch] $ReuseWindow,
+
+        [ValidateSet('on', 'off')]
+        [string] $Sync,
+
+        # code: 'code --diff <file1> <file2>'
+        [ValidateScript({throw 'nyi'})]
+        [switch] $Diff,
+
+        # code: 'code --merge <path1> <path2> <base> <result>'
+        [ValidateScript({throw 'nyi'})]
+        [switch] $Merge,
+
+        # wait for files to be closed
+        [switch] $Wait,
+
+        [ArgumentCompletions('en-US', 'de-de')]
+        [string] $Locale,
+
+        # cmd: "code --user-data-dir <dir>". Specifies the directory that user data is kept in. Can be used to open multiple distinct instances of Code.
+        [string] $UserDataDir,
+
+        # is => code --install-extension <id | path>.
+        # Installs or updates an extension. The argument is either an extension id or a path to a VSIX. The identifier of an extension is '${publisher}.${name}'. Use '--force' argument to update to latest version. To install a specific version provide '@${version}'. For example: 'vscode.csharp@1.2.3'.
+        # use with: --force, --profile
+        [ArgumentCompletions(
+            "'c:\foo\bar.vsix'",
+            "'publisher.name'", "'publisher.name@1.2.3'" )]
+        [string] $InstallExtension,
+
+        # is => code --uninstall-extension <id>
+        [ArgumentCompletions( "'publisher.name'", "'publisher.name@1.2.3'" )]
+        [string] $UninstallExtension,
+
+        # install pre-release extensions
+        # is => code --pre-release
+        [switch] $EnablePreReleaseExtension,
+
+        # skip prompts. install extensions, etc.
+        # is => code --force <extension>; ex: vscode.csharp@1.2.3;
+        # use with: --list-extensions;
+        [switch] $UsingForce,
+
+        # is => code --extensions-dir <dir>
+        [string] $ExtensionsDir,
+
+        # is => code --list-extensions
+        [switch] $ListExtensions,
+
+        # use with: --list-extensions; is => code --list-extensions --category <category>
+        # blank means show them. But only if explicitly passed
+        [ArgumentCompletions("''")]
+        [string] $FilterListExensionsCategory,
+
+        # is => code --list-extensions --show-versions
+        [switch] $ShowVersions,
+
+        # cmd: "code --profile <name>".  Opens the provided folder or workspace with the given profile and associates the profile with the workspace. If the profile does not exist, a new empty one is created.
+        [string] $Profile,
+
+        [ArgumentCompletions("'publisher.extension'")]
+        [string] $EnableProposedAPI,
+
+        # is => code --inspect-extensions <port>
+        [int] $InspectExtensionsPort,
+
+        # Allow debugging and profiling of extensions with the extension host being paused after start. Check the developer tools for the connection URI.
+        # is => code --inspect-brk-extensions <port>
+        [int] $InspectExtensionsBreakpointPort,
+
+        # Add a ShouldProcess -Confirm after showing built cli args
+        [ValidateScript({throw 'nyi'})]
+        [switch] $Confirm
+    )
+    begin {}
+    end {
+        [Collections.Generic.List[Object]] $binArgs = @()
+        [Collections.Generic.List[Object]] $OptionsArgs = @()
+
+
+        $PSBoundParameters | ConvertTo-Json -Depth 2
+            | Join-String -op 'PSboundParams: ' | Write-Verbose
+
+         <# options that are composed with the base ones #>
+        if( $VerboseLog ) {
+            $OptionsArgs.Add( '--verbose' )
+        }
+        if( $LogLevel ) {
+            $OptionsArgs.AddRange(@( '--log', $LogLevel ))
+        }
+        if( $Telemetry ) {
+            $OptionsArgs.Add( '--telemetry' )
+        }
+        if( $Transient ) {
+            $OptionsArgs.Add( '--transient' )
+        }
+        if( $DisableGPU ) {
+            $OptionsArgs.Add( '--disable-gpu' )
+        }
+        if( $Sync ) {
+            $OptionsArgs.AddRange(@( '--sync', $Sync ))
+        }
+        if( $ProfileStartup ) {
+            $OptionsArgs.Add( '--prof-startup' )
+        }
+        if( $DisableExtensions ) {
+            $OptionsArgs.Add( '--disable-extensions' )
+        }
+        if( $NewWindow ) {
+            $OptionsArgs.Add( '--new-window' )
+        }
+        if( $ReuseWindow ) {
+            $OptionsArgs.Add( '--reuse-window' )
+        }
+        if( $Wait ) {
+            $optionsArgs.Add( '--wait' )
+        }
+        if( $EnablePreReleaseExtension ) {
+            $optionsArgs.Add( '--pre-release' )
+        }
+        if( $Locale ) {
+            $optionsArgs.AddRange(@( '--locale', $Locale ))
+        }
+        if( $UserDataDir ) {
+            $optionsArgs.AddRange(@( '--user-data-dir', $UserDataDir ))
+        }
+        if( $Profile ) {
+            $optionsArgs.AddRange(@( '--profile', $Profile ))
+        }
+        if( $ExtensionsDir ) {
+            $optionsArgs.AddRange(@( '--extensions-dir', $ExtensionsDir ))
+        }
+        if( $InspectExtensionsPort ) {
+            $optionsArgs.AddRange(@( '--inspect-extensions', $InspectExtensionsPort ))
+        }
+        if( $InspectExtensionsBreakpointPort ) {
+            $optionsArgs.AddRange(@( '--inspect-brk-extensions', $InspectExtensionsBreakpointPort ))
+        }
+        if( $EnableProposedAPI ) {
+            $optionsArgs.AddRange(@(
+                '--enable-proposed-api'
+                $EnableProposedAPI
+            ))
+        }
+
+        <# modal modes, that requires a clear/reset $BinArgs #>
+        if( $ListExtensions ) {
+            $binArgs = @(
+                $OptionsArgs
+                '--list-extensions'
+                if( $ShowVersions ) { '--show-versions' }
+
+                # if blank, list possible extension categories
+                if( $FilterListExensionsCategory -or
+                    $PSBoundParameters.ContainsKey('FilterListExensionsCategory')
+                ) {
+                    "--category={0}" -f @(  $FilterListExensionsCategory )
+                }
+            )
+        }
+        if( $UpdateExtensions )  {
+            $binArgs = @(
+                $OptionsArgs
+                '--update-extensions'
+            )
+        }
+        if( $InstallExtension )  {
+            $binArgs = @(
+                $OptionsArgs
+                '--install-extension'
+                $InstallExtension
+            )
+        }
+        if( $UninstallExtension )  {
+            $binArgs = @(
+                $OptionsArgs
+                '--uninstall-extension'
+                $InstallExtension
+            )
+        }
+        if( $FileWithLineNumberString ) {
+            $binArgs = @(
+                $OptionsArgs
+                '--goto'
+                $FileWithLineNumberString
+            )
+        }
+        if( $GotoFile ) {
+            $binArgs = @(
+                $OptionsArgs
+                '--goto'
+                $GoToFile
+            )
+        }
+        if( $AddDirectory ) {
+            $binArgs = @(
+                $OptionsArgs
+                '--add'
+                $AddDirectory
+            )
+        }
+        if( $RemoveDirectory ) {
+            $binArgs = @(
+                $OptionsArgs
+                '--remove'
+                $RemoveDirectory
+            )
+        }
+        if( $Version ) {
+            $binArgs = @(
+                $OptionsArgs
+                '--version'
+            )
+        }
+        if( $LocateShellIntegrationPath ) {
+            $binArgs = @(
+                # $OptionsArgs
+                '--locate-shell-integration-path'
+                $LocateShellIntegrationPath
+            )
+        }
+        if( $Status ) {
+            $binArgs = @(
+                # $OptionsArgs
+                '--status'
+            ) # is this mode exclusive?
+        }
+        if( $FromStdIn ) {
+            $binArgs.add( '-' )
+        }
+
+        if( $WhatIf ) {
+            $binArgs | Join-String -sep ' ' -op 'invoke "code" => '
+                | Write-Host -fg 'gray70' -bg 'gray30'
+
+            return $binArgs
+        }
+
+        & ( Mint.Require-App 'code' ) @BinArgs
+    }
+    process {}
+
 }
 
 function _Resolve-CommandFileLocation {
@@ -528,7 +927,6 @@ function Find-MintilsFunctionDefinition {
     )
     begin {
         $binCode = Mint.Require-AppInfo -Name 'code'
-        write-warning 'WIP: New Find-Func implementation'
     }
     process {
         $found = _Resolve-CommandFileLocation -InputObject $InputObject -Verbose
@@ -549,39 +947,6 @@ function Find-MintilsFunctionDefinition {
         }
 
         & $binCode @( '--goto', $Found.FileWithLineNumberString )
-        # throw "old logic starts here"
-        # $query = _Resolve-CommandFileLocation -InputObject $InputObject
-        # foreach($Item in $query) {
-        #     if( $PassThru ) { $item; continue; }
-        #     if( -not (Test-Path $Item.FullName ) ) {
-        #         $msg = '.FullName not found on Item: {0}' -f $Item
-        #         $msg | Write-Warning
-        #         $msg | write-error
-        #         continue
-        #     }
-        #     $binArgs = @(
-        #         '--goto'
-        #         ( Get-Item -ea 'stop' $item.FullName )
-        #     )
-
-        #     if( $item.StartLineNumber -and $item.Path ) {
-        #         $binArgs = @(
-        #             '--goto'
-        #             '{0}:{1}' -f @(
-        #                 Get-Item -ea 'stop' $Item.Path.FullName
-        #                 $item.StartLineNumber
-        #             )
-        #         )
-        #     }
-        #     if( -not $PassThru ) {
-        #         $binArgs
-        #             | Join-String -sep ' ' -op '    invoke code => '
-        #             | Write-Host -fg 'gray80' -bg 'gray30'
-        #     }
-
-        #     & $binCode @binArgs
-        # }
-
     }
 }
 
@@ -1890,11 +2255,15 @@ function Invoke-MintilsAppVsCode {
     [CmdletBinding()]
     param(
         [ValidateNotNull()]
-        [Alias('PSPath', 'Path')]
-        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+        [Alias('PSPath', 'Path', 'File', 'Goto')]
+        [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName, ParameterSetName = 'FromInput' )]
         [object] $InputObject,
 
+        [Parameter(ValueFromPipelineByPropertyName)]
+        [string] $FileWithLineNumberString = '',
+
         # show dynamic help
+        [Parameter(Mandatory, ParameterSetName = 'HelpOnly' )]
         [Alias('Help')]
         [switch] $ShowHelp,
 
@@ -1916,11 +2285,14 @@ function Invoke-MintilsAppVsCode {
         }
     }
     process {
-        if( $ShowHelp ) { return }
+        if( $ShowHelp -or $PSCmdlet.ParameterSetName -eq 'HelpOnly' ) { return }
+        [Collections.Generic.List[Object]] $binArgs = @()
 
         # Attempt to convert input to filepath
-        $file = Get-Item -ea 'ignore' $InputObject
-
+        $file = Get-Item -ea 'ignore' $InputObject.File
+        if( -not $File ) {
+            $file = Get-Item -ea 'ignore' $InputObject
+        }
         # or, grab filepath from a command type
         if( -not $File ) {
             $maybe_funcDef = Mint.Find-FunctionDefinition -PassThru -InputObject $InputObject
@@ -1935,10 +2307,15 @@ function Invoke-MintilsAppVsCode {
             return
         }
 
+        # try to use Mint.Find-FuncDef's output
         $binArgs = @(
             '--goto'
-            $File.FullName
+            if( $FileWithLineNumberString ) { $FileWithLineNumberString }
+            else { $File.Fullname }
+            # if( $File.FileWithLineNumberString ) { $File.FileWithLineNumberString }
+            # else { $File.Fullname }
         )
+
         $render_args = $binArgs | Join-String -sep ' ' -op 'invoke "code" => '
         $render_args | Write-Verbose
         if( $WhatIf -or $PSHost ) {
@@ -1946,9 +2323,11 @@ function Invoke-MintilsAppVsCode {
         }
 
         if( $WhatIf ) { return }
-
         if( Test-Path $File ) {
             & ( Mint.Require-App 'code' ) @BinArgs
+        } else {
+            'File did not exist for type: ' -f ( ( $InputObject )?.GetType() ) | Write-Error
+            return
         }
     }
     end { }
@@ -1958,10 +2337,20 @@ function New-MintilsHashSetFileSystemInfo {
     <#
     .SYNOPSIS
         return a New hashset for type: [FileSystemInfo] with Case-Insensitive comparisons
+    .notes
+        Should paths with a trailing '/' or '\' be considered a duplicate? Is there any cases that removing the suffix will break older apps ?
     .example
         > $Collection = @( $Env:Path -split [IO.Path]::PathSeparator  -as [IO.DirectoryInfo[]] )
         > $set = _New-HashSet.FileSystemInfo -Collection $Collection
         > $Collection.count, $set.count
+    .example
+        $collection  = @( $Env:PATH -split [IO.Path]::PathSeparator  -as [IO.DirectoryInfo[]] )
+        $more =  gci 'c:\foo\bar' -directory
+        $pathSet = Mint.New-HashSet.FileInfo -Collection $collection
+        foreach($item in $More) { $null = $pathSet.Add( $item ) }
+        $pathSet -join [IO.Path]::PathSeparator | Write-host -fore salmon
+    .example
+        # See: <file:///./../../../Tests/Public/New-HashSet.FileSystemInfo.ps1>  ( or: ${workspaceFolder}/Tests/Public/New-HashSet.FileSystemInfo.ps1 )
     #>
     [Alias(
         'New-MintilsHashSet.FileInfo',
@@ -1970,13 +2359,18 @@ function New-MintilsHashSetFileSystemInfo {
     [CmdletBinding()]
     [OutputType( [System.Collections.Generic.HashSet[System.IO.FileSystemInfo]] )]
     param(
-        [Alias('InputObject', 'Fullname', 'Path')]
-        [System.IO.FileSystemInfo[]] $Collection = @(),
+        [Alias('InputObject', 'Fullname', 'Path', 'Collection' )]
+        # [System.IO.FileSystemInfo[]] $Collection = @(),
+        [object[]] $InputCollection = @(),
         # [System.IO.FileSystemInfo[]] $Collection = @(),
 
         # future, will need the option
         [ValidateScript({throw 'nyi'})]
         [switch] $UsingCaseSensitive
+    )
+
+    [IO.FileSystemInfo[]] $Collection = @(
+        _Coerce.FileSystemInfo.FromString -InputObject $InputCollection
     )
 
     $Comparer = [Collections.Generic.EqualityComparer[IO.FileSystemInfo]]::Create(
@@ -1997,8 +2391,8 @@ function New-MintilsHashSetFileSystemInfo {
         throw "_New-HashSet.FileSystemInfo: Something failed creating HashSet[FileSystemInfo] !"
     }
 
-    $hs.GetType() | Join-String -op 'Warn!: Is now returning an array: to fix! typeof: ' | write-host -fg coral
-    return $Set
+    $set.GetType() | Join-String -op 'result typeof: ' | Write-Verbose
+    return ,$Set
 }
 
 function New-MintilsRegexOrExpression {
