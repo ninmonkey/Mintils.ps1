@@ -22,13 +22,18 @@
     [CmdletBinding()]
     [OutputType( [System.Collections.Generic.HashSet[System.IO.FileSystemInfo]] )]
     param(
-        [Alias('InputObject', 'Fullname', 'Path')]
-        [System.IO.FileSystemInfo[]] $Collection = @(),
+        [Alias('InputObject', 'Fullname', 'Path', 'Collection' )]
+        # [System.IO.FileSystemInfo[]] $Collection = @(),
+        [object[]] $InputCollection = @(),
         # [System.IO.FileSystemInfo[]] $Collection = @(),
 
         # future, will need the option
         [ValidateScript({throw 'nyi'})]
         [switch] $UsingCaseSensitive
+    )
+
+    [IO.FileSystemInfo[]] $Collection = @(
+        _Coerce.FileSystemInfo.FromString -InputObject $InputCollection
     )
 
     $Comparer = [Collections.Generic.EqualityComparer[IO.FileSystemInfo]]::Create(
