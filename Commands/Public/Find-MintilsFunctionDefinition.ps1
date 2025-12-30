@@ -36,7 +36,7 @@
         $binCode = Mint.Require-AppInfo -Name 'code'
     }
     process {
-        $found = _Resolve-CommandFileLocation -InputObject $InputObject -Verbose
+        $found = _Resolve-CommandFileLocation -InputObject $InputObject
         if( $PassThru ) { $found ; return ; }
 
         $binArgs = @(

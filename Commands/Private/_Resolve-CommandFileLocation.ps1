@@ -25,7 +25,7 @@
     [CmdletBinding()]
     param(
         # File, Directory, PSModuleInfo, String, Etc
-        # Supports Types like: AliasInfo, ApplicationInfo, CmdletInfo, DirectoryInfo, ExternalScriptInfo, FileSystemInfo, FunctionInfo, PSModuleInfo, FilterInfo, String, etc...
+        # Supports Types like: ErrorRecord, InvocationInfo, AliasInfo, ApplicationInfo, CmdletInfo, DirectoryInfo, ExternalScriptInfo, FileSystemInfo, FunctionInfo, PSModuleInfo, FilterInfo, String, etc...
         [Alias('Object', 'InObj')]
         [ValidateNotNull()]
         [Parameter(Mandatory)]
@@ -80,6 +80,8 @@
             $return.PSTypeName = 'Mintils.Resolved.Command.ErrorRecord'
             if( $err.InvocationInfo ) {
                 $return = _Resolve-CommandFileLocation -InputObject $err.InvocationInfo
+                   $return | Add-Member -Force -NotePropertyMembers @{ ErrorRecordInstance = $Err }
+
                 break
             }
 
@@ -187,8 +189,13 @@
             break
         }
     }
+    # Properties to always append, or attempt to
     # should alias Path/PSPath/FullName for cleaner parameter binding
     if( -not $return.Path ) { $return.Path = $return.File }
+
+    if( -not $return.FileWithLineNumberString ) {
+        $return.FileWithLineNumberString = _Format-FullNameWithLineNumbers -Path $return.File -StartLineNumber $return.StartLineNumber -StartColumnNumber $return.StartColumnNumber
+    }
 
     [pscustomobject] $return
 }
