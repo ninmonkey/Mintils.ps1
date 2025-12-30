@@ -53,6 +53,31 @@
             throw "nyi $( $InputObject.GetType() ) "
             break
         }
+        { $_ -is [System.Management.Automation.InvocationInfo] } {
+            [System.Management.Automation.InvocationInfo] $invo = $_
+            $return.PSTypeName = 'Mintils.Resolved.Command.InvocationInfo'
+
+            $maybeFile = Get-Item -ea ignore $invo.ScriptName
+            if ( -not $MaybeFile ) { $maybeFile = Get-Item -ea ignore $invo.PSCommandPath }
+            i f( -not $MaybeFile ) {
+                throw "Unable to resolve script path from type: $( $InputObject.GetType() ) !"
+                break
+            }
+            $return.StartLineNumber        = $invo.ScriptLineNumber
+            $return.EndLineNumber          = $null
+            $return.StartColumnNumber      = $invo.OffsetInLine
+            $return.EndColumnNumber        = $null
+            $return.InvocationInfoInstance = $invo
+
+            break
+        }
+        { $_ -is [System.Management.Automation.ErrorRecord] } {
+            [System.Management.Automation.ErrorRecord] $err = $_
+
+            $return.PSTypeName = 'Mintils.Resolved.Command.ErrorRecord'
+            throw "nyi $( $InputObject.GetType() ) "
+            break
+        }
         { $_ -is [System.Management.Automation.FunctionInfo] } {
             [System.Management.Automation.FunctionInfo] $func = $_
 
