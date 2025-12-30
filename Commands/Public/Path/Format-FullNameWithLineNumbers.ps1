@@ -1,4 +1,4 @@
-﻿function _Format-FullNameWithLineNumbers {
+﻿function Format-MintilsFullNameWithLineNumbers {
     <#
     .SYNOPSIS
         formats optional numbers in the format: path[:lineNumber[:columnNumber]]
@@ -14,6 +14,10 @@
             foo.ps1:234
             foo.ps1:234:23
     #>
+    [Alias(
+        'Mint.Format-FullNameWithLineNumber',
+        '_Format-FullNameWithLineNumbers' # previously used internal name
+    )]
     [OutputType( [string] )]
     param(
         [Alias('FullName', 'File', 'PSPath' )]
@@ -22,6 +26,7 @@
         [Alias('LineNumber')]
         [int] $StartLineNumber,
 
+        # if LineNumber is not set, ColNumber is ignored.
         [Alias('ColNumber')]
         [int] $StartColumnNumber
 
@@ -31,13 +36,11 @@
         # [ValidateScript({throw 'nyi'})]
             # [switch] $UseReverseIndex
     )
-    $Item = Get-Item $Path -ea ignore
-    if( $null -eq $Path -or -not $Item ) {
-        return
-    }
+    if( [string]::IsNullOrEmpty( $Path ) ) { return }
 
     # allows it to render for not-yet-existing-paths
-    $fullName = $Item.FullName ? $Item.FullName : $Path
+    $Item     = Get-Item $Path -ea ignore
+    $fullName = $Item.FullName ?? $Path    # $Item.FullName ? $Item.FullName : $Path
 
     [string] $renderText = @(
         $fullName

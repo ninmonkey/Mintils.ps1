@@ -194,7 +194,7 @@
     if( -not $return.Path ) { $return.Path = $return.File }
 
     if( -not $return.FileWithLineNumberString ) {
-        $return.FileWithLineNumberString = _Format-FullNameWithLineNumbers -Path $return.File -StartLineNumber $return.StartLineNumber -StartColumnNumber $return.StartColumnNumber
+        $return.FileWithLineNumberString = Mint.Format-FullNameWithLineNumber -Path $return.File -StartLineNumber $return.StartLineNumber -StartColumnNumber $return.StartColumnNumber
     }
 
     [pscustomobject] $return
