@@ -35,9 +35,10 @@
         | Join-String -f 'enter => type: {0} ' | Write-Verbose
 
     $return = [ordered]@{
-        PSTypeName = 'mintils.Resolved.Command.OtherInfo'
+        PSTypeName = 'Mintils.Resolved.Command.OtherInfo'
     }
     switch( $InputObject ) {
+        # I used explicit 'break' and 'returns' for clarity, even if not required
         { $_ -is [System.Management.Automation.AliasInfo] } {
             $return.PSTypeName = 'Mintils.Resolved.Command.AliasInfo'
             [Management.Automation.CommandInfo] $ResolvedCmd = $InputObject.ResolvedCommand
@@ -59,14 +60,16 @@
 
             $maybeFile = Get-Item -ea ignore $invo.ScriptName
             if ( -not $MaybeFile ) { $maybeFile = Get-Item -ea ignore $invo.PSCommandPath }
-            i f( -not $MaybeFile ) {
+            if ( -not $MaybeFile ) {
                 throw "Unable to resolve script path from type: $( $InputObject.GetType() ) !"
                 break
             }
+            $return.File                   = Get-Item $maybeFile
             $return.StartLineNumber        = $invo.ScriptLineNumber
             $return.EndLineNumber          = $null
             $return.StartColumnNumber      = $invo.OffsetInLine
             $return.EndColumnNumber        = $null
+            $return.FileExists             = Test-Path -ea ignore $return.File
             $return.InvocationInfoInstance = $invo
 
             break
@@ -75,7 +78,12 @@
             [System.Management.Automation.ErrorRecord] $err = $_
 
             $return.PSTypeName = 'Mintils.Resolved.Command.ErrorRecord'
-            throw "nyi $( $InputObject.GetType() ) "
+            if( $err.InvocationInfo ) {
+                $return = _Resolve-CommandFileLocation -InputObject $err.InvocationInfo
+                break
+            }
+
+            throw "Unable to resolve script path from type: $( $InputObject.GetType() ) "
             break
         }
         { $_ -is [System.Management.Automation.FunctionInfo] } {
@@ -152,10 +160,35 @@
             # $return += ' , then => {0}' -f (  $nextResolved )
             break
         }
+        { $_ -is [System.Management.Automation.PSObject] } { # always tested last to prevent coercion
+            [System.Management.Automation.PSObject] $psobj = $_
+
+            # if already parsed ffrom here, emit existing without altering anything. including type name.
+            $alreadyParsed = ( @( $psobj.PSTypeNames ) -match 'Mintils\.Resolved\.' ).count -gt 0
+            if( $alreadyParsed ) {
+                $return = $psobj
+                break
+            }
+            # or if prop types exist
+            $names = $psobj.PSobject.Properties.Name
+            if( $names -contains 'file' -and $names -contains 'StartLineNumber' ) {
+                $return = $psobj
+                break
+            }
+            throw "Unexpected PSCO from another source. PSTypeNames: $( $InputObject.PSTypeNames -join ', ' ) "
+            # $return.PSTypeName       = 'Mintils.Resolved.Command.PSObject'
+            # $return.File             = $psobj.Name
+            # $return.FileExists       = Test-Path -ea ignore $return.File
+            # $return.PSObjectInstance = $psobj
+            break
+        }
         default {
             throw ("Unhandled type: $( $InputObject.GetType() )")
             break
         }
     }
+    # should alias Path/PSPath/FullName for cleaner parameter binding
+    if( -not $return.Path ) { $return.Path = $return.File }
+
     [pscustomobject] $return
 }
