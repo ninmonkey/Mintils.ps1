@@ -1,5 +1,5 @@
 {
-	"folders": [ // 2025-12-20
+	"folders": [ // 2025-12-30
 		{
 			"path": "."
 		}
@@ -17,6 +17,8 @@
         // },
 
         "chat.mcp.autostart": "never",
+        "terminal.integrated.shellIntegration.enabled": false,
+        "terminal.integrated.shellIntegration.timeout": 0,
     },
 
 }

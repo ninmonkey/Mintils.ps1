@@ -552,7 +552,7 @@ function _Resolve-CommandFileLocation {
     [CmdletBinding()]
     param(
         # File, Directory, PSModuleInfo, String, Etc
-        # Supports Types like: AliasInfo, ApplicationInfo, CmdletInfo, DirectoryInfo, ExternalScriptInfo, FileSystemInfo, FunctionInfo, PSModuleInfo, FilterInfo, String, etc...
+        # Supports Types like: ErrorRecord, InvocationInfo, AliasInfo, ApplicationInfo, CmdletInfo, DirectoryInfo, ExternalScriptInfo, FileSystemInfo, FunctionInfo, PSModuleInfo, FilterInfo, String, etc...
         [Alias('Object', 'InObj')]
         [ValidateNotNull()]
         [Parameter(Mandatory)]
@@ -562,9 +562,10 @@ function _Resolve-CommandFileLocation {
         | Join-String -f 'enter => type: {0} ' | Write-Verbose
 
     $return = [ordered]@{
-        PSTypeName = 'mintils.Resolved.Command.OtherInfo'
+        PSTypeName = 'Mintils.Resolved.Command.OtherInfo'
     }
     switch( $InputObject ) {
+        # I used explicit 'break' and 'returns' for clarity, even if not required
         { $_ -is [System.Management.Automation.AliasInfo] } {
             $return.PSTypeName = 'Mintils.Resolved.Command.AliasInfo'
             [Management.Automation.CommandInfo] $ResolvedCmd = $InputObject.ResolvedCommand
@@ -578,6 +579,40 @@ function _Resolve-CommandFileLocation {
         { $_ -is [System.Management.Automation.ApplicationInfo] } {
             $return.PSTypeName = 'Mintils.Resolved.Command.ApplicationInfo'
             throw "nyi $( $InputObject.GetType() ) "
+            break
+        }
+        { $_ -is [System.Management.Automation.InvocationInfo] } {
+            [System.Management.Automation.InvocationInfo] $invo = $_
+            $return.PSTypeName = 'Mintils.Resolved.Command.InvocationInfo'
+
+            $maybeFile = Get-Item -ea ignore $invo.ScriptName
+            if ( -not $MaybeFile ) { $maybeFile = Get-Item -ea ignore $invo.PSCommandPath }
+            if ( -not $MaybeFile ) {
+                throw "Unable to resolve script path from type: $( $InputObject.GetType() ) !"
+                break
+            }
+            $return.File                   = Get-Item $maybeFile
+            $return.StartLineNumber        = $invo.ScriptLineNumber
+            $return.EndLineNumber          = $null
+            $return.StartColumnNumber      = $invo.OffsetInLine
+            $return.EndColumnNumber        = $null
+            $return.FileExists             = Test-Path -ea ignore $return.File
+            $return.InvocationInfoInstance = $invo
+
+            break
+        }
+        { $_ -is [System.Management.Automation.ErrorRecord] } {
+            [System.Management.Automation.ErrorRecord] $err = $_
+
+            $return.PSTypeName = 'Mintils.Resolved.Command.ErrorRecord'
+            if( $err.InvocationInfo ) {
+                $return = _Resolve-CommandFileLocation -InputObject $err.InvocationInfo
+                   $return | Add-Member -Force -NotePropertyMembers @{ ErrorRecordInstance = $Err }
+
+                break
+            }
+
+            throw "Unable to resolve script path from type: $( $InputObject.GetType() ) "
             break
         }
         { $_ -is [System.Management.Automation.FunctionInfo] } {
@@ -601,15 +636,13 @@ function _Resolve-CommandFileLocation {
             $return.EndColumnNumber      = $func.ScriptBlock.Ast.Extent.EndColumnNumber
             $return.FunctionInfoInstance = $func
 
-            if( -not $return.FileExists ) {
-                $return.FileWithLineNumberString = '' # fix: convert to calculated property
-            } else {
-                $return.FileWithLineNumberString = '{0}:{1}:{2}' -f @(
-                    $return.File.FullName,
-                    $return.StartLineNumber
-                    $return.StartColumnNumber
-                )
+            $format_splat = @{
+                Path              = $return.File
+                StartLineNumber   = $return.StartLineNumber
+                StartColumnNumber = $return.StartColumnNumber
             }
+            $return.FileWithLineNumberString = Mint.Format-FullNameWithLineNumber @format_splat
+
             $return.HelpFile = $func.HelpFile
             $return.HelpUri  = $func.HelpUri
             # $return = 'func'
@@ -654,11 +687,46 @@ function _Resolve-CommandFileLocation {
             # $return += ' , then => {0}' -f (  $nextResolved )
             break
         }
+        { $_ -is [System.Management.Automation.PSObject] } { # always tested last to prevent coercion
+            [System.Management.Automation.PSObject] $psobj = $_
+
+            # if already parsed ffrom here, emit existing without altering anything. including type name.
+            $alreadyParsed = ( @( $psobj.PSTypeNames ) -match 'Mintils\.Resolved\.' ).count -gt 0
+            if( $alreadyParsed ) {
+                $return = $psobj
+                break
+            }
+            # or if prop types exist
+            $names = $psobj.PSobject.Properties.Name
+            if( $names -contains 'file' -and $names -contains 'StartLineNumber' ) {
+                $return = $psobj
+                break
+            }
+            throw "Unexpected PSCO from another source. PSTypeNames: $( $InputObject.PSTypeNames -join ', ' ) "
+            # $return.PSTypeName       = 'Mintils.Resolved.Command.PSObject'
+            # $return.File             = $psobj.Name
+            # $return.FileExists       = Test-Path -ea ignore $return.File
+            # $return.PSObjectInstance = $psobj
+            break
+        }
         default {
             throw ("Unhandled type: $( $InputObject.GetType() )")
             break
         }
     }
+    # Properties to always append, or attempt to
+    # should alias Path/PSPath/FullName for cleaner parameter binding
+    if( -not $return.Path ) { $return.Path = $return.File }
+
+    if( -not $return.FileWithLineNumberString ) {
+        $format_splat = @{
+            Path              = $return.File
+            StartLineNumber   = $return.StartLineNumber
+            StartColumnNumber = $return.StartColumnNumber
+        }
+        $return.FileWithLineNumberString = Mint.Format-FullNameWithLineNumber @format_splat
+    }
+
     [pscustomobject] $return
 }
 
@@ -929,7 +997,7 @@ function Find-MintilsFunctionDefinition {
         $binCode = Mint.Require-AppInfo -Name 'code'
     }
     process {
-        $found = _Resolve-CommandFileLocation -InputObject $InputObject -Verbose
+        $found = _Resolve-CommandFileLocation -InputObject $InputObject
         if( $PassThru ) { $found ; return ; }
 
         $binArgs = @(
@@ -1347,6 +1415,60 @@ function Format-MintilsConsoleHyperlink {
     )
     $8 = [char] 27 + "]8;;"
     "${8}{0}`a{1}${8}`a" -f ( $Uri, $InputObject )
+}
+
+function Format-MintilsFullNameWithLineNumbers {
+    <#
+    .SYNOPSIS
+        formats optional numbers in the format: path[:lineNumber[:columnNumber]]
+    .description
+        Future could extend this to use the relative/reverse path syntax too
+    .example
+        > _Format-FulLNameWithLineNumber -Path 'foo.ps1'
+        > _Format-FulLNameWithLineNumber -Path 'foo.ps1' -Line 234
+        > _Format-FulLNameWithLineNumber -Path 'foo.ps1' -Line 234 -Col 23
+
+        # outputs:
+            foo.ps1
+            foo.ps1:234
+            foo.ps1:234:23
+    #>
+    [Alias(
+        'Mint.Format-FullNameWithLineNumber',
+        '_Format-FullNameWithLineNumbers' # previously used internal name
+    )]
+    [OutputType( [string] )]
+    param(
+        [Alias('FullName', 'File', 'PSPath' )]
+        [object] $Path,
+
+        [Alias('LineNumber')]
+        [int] $StartLineNumber,
+
+        # if LineNumber is not set, ColNumber is ignored.
+        [Alias('ColNumber')]
+        [int] $StartColumnNumber
+
+        # [ValidateScript({throw 'nyi'})]
+            # [switch] $JustToLastLine,
+
+        # [ValidateScript({throw 'nyi'})]
+            # [switch] $UseReverseIndex
+    )
+    if( [string]::IsNullOrEmpty( $Path ) ) { return }
+
+    # allows it to render for not-yet-existing-paths
+    $Item     = Get-Item $Path -ea ignore
+    $fullName = $Item.FullName ?? $Path    # $Item.FullName ? $Item.FullName : $Path
+
+    [string] $renderText = @(
+        $fullName
+        if( $StartLineNumber ) { ':{0}' -f $StartLineNumber }
+        if( $StartLineNumber -and $StartColumnNumber ) { ':{0}' -f $StartColumnNumber }
+    ) -join ''
+
+    if( -not (Test-Path $Path )) { }
+    return $renderText
 }
 
 function Format-MintilsRelativePath {
