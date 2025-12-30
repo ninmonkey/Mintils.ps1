@@ -10,21 +10,26 @@ function Invoke-MintilsAppWithConfirm {
 
         - todo: future will support input pipeline, with confirmation
     .example
+        # The main short syntax, without requiring parameter names
+        # [1] print the CLI args, then run without confirm
+        > Mint.Invoke-App gh 'repo', 'list'
+
+        # [2] Same thing but require confirmation
+        > Mint.Invoke-AppWithConfirm gh 'repo', 'list'
+    .example
         # main use prompt to run a command
         > Mint.Invoke-AppWithConfirm -Name 'code' -Args @( '--goto', $Profile.CurrentUserAllHosts ) -Confirm
-    .example
-        # Short syntax
-        > Mint.Invoke-App -Confirm gh 'repo', 'list'
     .EXAMPLE
         # Run the command as normal, capture results
         # show command line args on the host
         > $found = Mint.Invoke-AppWithConfirm -Name 'fd'
             # out: Mint.InvokeApp => fd --color=never
     .example
-        # Do not log to host
+        # Do not log cli args to host
         $found = Mint.Invoke-AppWithConfirm -Name 'fd' -Silent
     #>
     [Alias(
+        'Invoke-MintilsApp',
         'Mint.Invoke-App',
         'Mint.Invoke-AppWithConfirm' )]
     [CmdletBinding()]
@@ -39,7 +44,8 @@ function Invoke-MintilsAppWithConfirm {
         [Alias('TestOnly', 'EchoWithoutRun')]
         [switch] $WhatIf,
 
-        # Default runs the command without prompt, if true then it requires a prompt
+        # Default runs the command without prompt, if true then it requires a prompt.
+        # Smart aliases change the default if named 'WithConfirm'
         [Alias('Confirm')]
         [switch] $UseConfirm,
 
@@ -52,6 +58,16 @@ function Invoke-MintilsAppWithConfirm {
             "'--color=always'", "'--color=never'" )]
         [string[]] $TemplateArgs
     )
+    begin {
+        if( $PSCmdlet.MyInvocation.InvocationName -in @( 'Mint.Invoke-App', 'Invoke-MintilsApp' ) ) {
+            $UseConfirm = $false
+        }
+        if( $PSCmdlet.MyInvocation.InvocationName -match 'WithConfirm' ) {
+            $UseConfirm = $True
+        }
+        'Smart aliases resolved $UseConfirm as {0}' -f $UseConfirm | Write-Debug
+        # if( $PSCmdlet.MyInvocation.InvocationName -in @( 'Mint.Invoke-AppConfirm', 'Mint.Invoke-AppWithConfirm' ) ) {
+    }
     end {
         $CommandLineArgs = @( $CommandLineArgs; $TemplateArgs; )
         [string] $RenderArgs = $CommandLineArgs | Join-String -sep ' ' -op "${CommandName} "
