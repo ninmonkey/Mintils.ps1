@@ -109,15 +109,13 @@
             $return.EndColumnNumber      = $func.ScriptBlock.Ast.Extent.EndColumnNumber
             $return.FunctionInfoInstance = $func
 
-            if( -not $return.FileExists ) {
-                $return.FileWithLineNumberString = '' # fix: convert to calculated property
-            } else {
-                $return.FileWithLineNumberString = '{0}:{1}:{2}' -f @(
-                    $return.File.FullName,
-                    $return.StartLineNumber
-                    $return.StartColumnNumber
-                )
+            $format_splat = @{
+                Path              = $return.File
+                StartLineNumber   = $return.StartLineNumber
+                StartColumnNumber = $return.StartColumnNumber
             }
+            $return.FileWithLineNumberString = Mint.Format-FullNameWithLineNumber @format_splat
+
             $return.HelpFile = $func.HelpFile
             $return.HelpUri  = $func.HelpUri
             # $return = 'func'
@@ -194,7 +192,12 @@
     if( -not $return.Path ) { $return.Path = $return.File }
 
     if( -not $return.FileWithLineNumberString ) {
-        $return.FileWithLineNumberString = Mint.Format-FullNameWithLineNumber -Path $return.File -StartLineNumber $return.StartLineNumber -StartColumnNumber $return.StartColumnNumber
+        $format_splat = @{
+            Path              = $return.File
+            StartLineNumber   = $return.StartLineNumber
+            StartColumnNumber = $return.StartColumnNumber
+        }
+        $return.FileWithLineNumberString = Mint.Format-FullNameWithLineNumber @format_splat
     }
 
     [pscustomobject] $return

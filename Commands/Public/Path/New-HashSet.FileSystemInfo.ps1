@@ -2,6 +2,8 @@
     <#
     .SYNOPSIS
         return a New hashset for type: [FileSystemInfo] with Case-Insensitive comparisons
+    .notes
+        Should paths with a trailing '/' or '\' be considered a duplicate? Is there any cases that removing the suffix will break older apps ?
     .example
         > $Collection = @( $Env:Path -split [IO.Path]::PathSeparator  -as [IO.DirectoryInfo[]] )
         > $set = _New-HashSet.FileSystemInfo -Collection $Collection
