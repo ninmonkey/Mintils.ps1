@@ -1,5 +1,6 @@
 ﻿
 $script:__cache_Get_TextStyle = @{}
+
 function Get-MintilsTextStyle {
     <#
     .SYNOPSIS
@@ -24,6 +25,7 @@ function Get-MintilsTextStyle {
     [CmdletBinding()]
     param(
         # Select first matching pattern
+        [ArgumentCompleter({ _Completer.Get-TextStyle @args })]
         [Parameter(Mandatory, ParameterSetName='ByNameLookup', Position = 0 )]
         [Alias('Name', 'ByName', 'Theme')]
         [string] $StyleName,
