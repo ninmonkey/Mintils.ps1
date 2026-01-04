@@ -9,6 +9,8 @@
 
             color: blue
             id: 123
+    .example
+        > $Profile | Select All*, Current* | Mint.Convert.Dict.FromObject | Mint.Write-Dict
     .link
         Mintils\Write-MintilsConsoleDict
     .link
@@ -19,6 +21,7 @@
     [CmdletBinding()]
     param(
         # hashtable or idictionary or what is best to iterate ?
+        [Parameter( Mandatory, ValueFromPipeline )]
         [Alias('Dict', 'Hashtable')]
         [Collections.IDictionary]
         $InputObject,
