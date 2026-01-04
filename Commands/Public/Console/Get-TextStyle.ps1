@@ -33,7 +33,12 @@
 
         [Parameter(Mandatory, ParameterSetName='ByListAll')]
         [Alias('All', 'List')]
-        [switch] $ListAll
+        [switch] $ListAll,
+
+         # output contains only Fg and Bg to make splatting simpler
+        [Parameter( ParameterSetName = 'ByNameLookup' )]
+        [Alias('OutputAsHash','AsHash' )]
+        [switch] $AsSplatableHash
     )
 
     switch( $PSCmdlet.ParameterSetName ) {
@@ -41,6 +46,7 @@
             $splat = @{
                 ByName    = $StyleName
                 OneOrNone = $OneOrNone
+                AsSplatableHash = [bool] $AsSplatableHash
             }
             _Get-TextStyle @splat
         }

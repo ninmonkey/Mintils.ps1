@@ -18,7 +18,12 @@
 
         [Parameter(Mandatory, ParameterSetName='ByListAll')]
         [Alias('All', 'List')]
-        [switch] $ListAll
+        [switch] $ListAll,
+
+        # output contains only Fg and Bg to make splatting simpler
+        [Parameter( ParameterSetName = 'ByNameLookup' )]
+        [Alias('OutputAsHash','AsHash' )]
+        [switch] $AsSplatableHash
     )
 
     $styles = @(
@@ -69,6 +74,22 @@
             Fg = '#a2bb91'
             Bg = $Null
             Category = 'Core'
+        }
+        @{
+            Name = 'Dict.Key'
+            SemanticName = 'Dict.Key'
+            Description = @('Dictionary keys are emphasized' ) -join ' '
+            fg = '#f4a460'
+            bg =  '#2e3440'
+            Category = 'Module.Command'
+        }
+        @{
+            Name = 'Dict.Value'
+            SemanticName = 'Dict.Value'
+            Description = @('Dictionary values are less emphasized' ) -join ' '
+            fg = 'gray70'
+            bg =  $null
+            Category = 'Module.Command'
         }
         <# superfluous section #>
 
@@ -122,7 +143,10 @@
                     ( $styles.Name -join ', ' )
             }
             $found | Join-String -f 'TextStyle found: "{0}"' -p Name | Write-Verbose
-            return $found
+            if( -not $AsSplatableHash ) { return $found }
+
+            $hash = @{ Fg = $Found.Fg; Bg = $Found.Bg }
+            return $hash
         }
         'ByListAll' {
             return $styles
