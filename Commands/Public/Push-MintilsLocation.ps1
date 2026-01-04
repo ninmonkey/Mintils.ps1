@@ -3,6 +3,9 @@
     .synopsis
         go to a path, auto convert-paths, since push/pop doesn't 2025-10-29
     .example
+        # jump to module
+        > Get-Module Pansies | Goto
+    .example
         # test whether types detect the correct properties
         $someFile = $Profile.CurrentUserAllHosts
         $someFile | Mint.Goto -Debug
@@ -15,6 +18,7 @@
     [Alias( 'Mint.Push-Location', 'Mint.Goto')]
     param(
         # Goto Location of this file. Files and Directories are valid
+        
         [Alias('FullName')]
         [Parameter(ValueFromPipeline, ValueFromPipelineByPropertyName)]
         [Object] $InputObject,
