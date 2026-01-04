@@ -20,20 +20,22 @@
                 $cur.SemanticName
                 $cur.Category
             )
+            [string] $ExampleRender = New-Text -fg $cur.Fg -bg $cur.bg -Object $cur.Name | Join-String
 
             $ListName = @( # example: "DimGood [Good.NoBg]""
                     New-Text -fg blue $_.Name
-                    New-Text -fg red ('[{0}]' -f $_.SemanticName  )
+                    # New-Text -fg red ('[{0}]' -f $_.SemanticName  )
+                    New-Text -fg $cur.Fg -bg $cur.bg -Object $cur.SemanticName | Join-String
+                    $ExampleRender
                 ) | Join-String -sep ' '
 
-            [string] $example = New-Text -fg $cur.Fg -bg $cur.bg -Object $cur.Name | Join-String
             [string] $tooltip = @(
                 @{
                     # Name = $cur.Name
                     Kind        = $cur.SemanticName
                     Category    = $cur.Category
                     Description = $cur.Description
-                    Example     = $Example
+                    Example     = $ExampleRender
                 }
                     | Mint.Write-Dict -PassThru -Delim ''
                     | Join-String -sep "`n"

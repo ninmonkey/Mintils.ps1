@@ -79,7 +79,8 @@
             Name = 'Dict.Key'
             SemanticName = 'Dict.Key'
             Description = @('Dictionary keys are emphasized' ) -join ' '
-            fg = '#f4a460'
+            # fg = '#f4a460'
+            fg = 'SkyBlue'
             bg =  '#2e3440'
             Category = 'Module.Command'
         }
