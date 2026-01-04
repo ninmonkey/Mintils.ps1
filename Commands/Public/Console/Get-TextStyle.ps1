@@ -1,4 +1,6 @@
-﻿function Get-MintilsTextStyle {
+﻿
+$script:__cache_Get_TextStyle = @{}
+function Get-MintilsTextStyle {
     <#
     .SYNOPSIS
         Get text colors by style name
@@ -40,6 +42,7 @@
         [Alias('OutputAsHash','AsHash' )]
         [switch] $AsSplatableHash
     )
+    $CacheLookup = $script:__cache_Get_TextStyle
 
     switch( $PSCmdlet.ParameterSetName ) {
         'ByNameLookup' {
@@ -48,7 +51,14 @@
                 OneOrNone = $OneOrNone
                 AsSplatableHash = [bool] $AsSplatableHash
             }
-            _Get-TextStyle @splat
+
+            if( $AsSplatableHash -and $CacheLookup.Contains( $StyleName ) ) {
+                return $CacheLookup[ $StyleName ]
+            }
+            $found = _Get-TextStyle @splat
+            $cacheLookup[ $StyleName ] = $found
+
+            return $found
         }
         'ByListAll' {
             _Get-TextStyle -ListAll
