@@ -51,8 +51,8 @@ function Get-MintilsTextStyle {
             $splat = @{
                 ByName    = $StyleName
                 OneOrNone = $OneOrNone
-                AsSplatableHash = [bool] $AsSplatableHash
             }
+            if( $PSBoundParameters.ContainsKey('AsSplatableHash') ) { $splat.AsSplatableHash = $AsSplatableHash }
 
             if( $AsSplatableHash -and $CacheLookup.Contains( $StyleName ) ) {
                 return $CacheLookup[ $StyleName ]
