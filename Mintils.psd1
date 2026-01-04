@@ -8,7 +8,7 @@
     RootModule        = 'mintils.psm1'
 
     # Version number of this module.
-    ModuleVersion     = '0.0.9'
+    ModuleVersion     = '0.0.10'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()

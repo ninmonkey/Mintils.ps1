@@ -50,6 +50,51 @@ function _Coerce.FileSystemInfo.FromString {
     }
 }
 
+function _Coerce.HashTable.FromKeyValuePairs { # or FromDictionaryEntry
+    <#
+    .synopsis
+        [internal] Converts arrays of [Collections.DictionaryEntry] to one hashtable
+    .description
+        Does not sort keys, Does not return [ordered]@{}
+    .example
+        > $hash = Gci Env:\ | _Coerce.HashTable.FromDictionaryEntry
+        > Mint.Write-Dict $Hash
+    .example
+        > Mint.Write-Dict ( _Coerce.HashTable.FromDictionaryEntry -InputObject $sample )
+    .LINK
+        Mintils\Mint.ConvertTo-Hashtable.FromKeyValues
+    #>
+    [OutputType( [System.Collections.Hashtable] )] # [System.Collections.Specialized.OrderedDictionary],
+    [CmdletBinding()]
+    param(
+        [Parameter( Mandatory, ValueFromPipeline )]
+        [object[]] $InputObject
+    )
+    begin {
+        $hash = @{}
+    }
+    process {
+        foreach( $Item in $InputObject ) {
+            if( $Item -is [Collections.DictionaryEntry] ) {
+                [Collections.DictionaryEntry] $Obj = $Item
+                $hash[ $Obj.Key ] = $Obj.Value
+                continue
+            }
+            if( $null -ne $Item.Key -and $null -ne $Item.Value ) {
+                $hash[ $Item.Key  ] = $Item.Value
+                continue
+            }
+            "Unhandled Item type: {0}" -f @(
+                ( $Item )?.GetType() ?? '<null>'
+            )  | Write-Error
+            continue
+        }
+    }
+    end {
+        $hash
+    }
+}
+
 function _Get-TextStyle {
     <#
     .SYNOPSIS
@@ -70,7 +115,12 @@ function _Get-TextStyle {
 
         [Parameter(Mandatory, ParameterSetName='ByListAll')]
         [Alias('All', 'List')]
-        [switch] $ListAll
+        [switch] $ListAll,
+
+        # output contains only Fg and Bg to make splatting simpler
+        [Parameter( ParameterSetName = 'ByNameLookup' )]
+        [Alias('OutputAsHash','AsHash' )]
+        [switch] $AsSplatableHash
     )
 
     $styles = @(
@@ -121,6 +171,22 @@ function _Get-TextStyle {
             Fg = '#a2bb91'
             Bg = $Null
             Category = 'Core'
+        }
+        @{
+            Name = 'Dict.Key'
+            SemanticName = 'Dict.Key'
+            Description = @('Dictionary keys are emphasized' ) -join ' '
+            fg = '#f4a460'
+            bg =  '#2e3440'
+            Category = 'Module.Command'
+        }
+        @{
+            Name = 'Dict.Value'
+            SemanticName = 'Dict.Value'
+            Description = @('Dictionary values are less emphasized' ) -join ' '
+            fg = 'gray70'
+            bg =  $null
+            Category = 'Module.Command'
         }
         <# superfluous section #>
 
@@ -174,7 +240,10 @@ function _Get-TextStyle {
                     ( $styles.Name -join ', ' )
             }
             $found | Join-String -f 'TextStyle found: "{0}"' -p Name | Write-Verbose
-            return $found
+            if( -not $AsSplatableHash ) { return $found }
+
+            $hash = @{ Fg = $Found.Fg; Bg = $Found.Bg }
+            return $hash
         }
         'ByListAll' {
             return $styles
@@ -783,6 +852,99 @@ function _Resolve-DirectoryFromPathlike {
     }
     "Unhandled input type when converting '${InputObject}' of type $( ( $InputObject)?.GetType() ) to path: {0}" | Write-Warning
     # Maybe always attempt PSPath ? Or leave that to the caller?
+}
+
+function Convert-MintilsHashtableFromKeyValues {
+    <#
+    .synopsis
+        [internal] Converts arrays of [Collections.DictionaryEntry] to one hashtable
+    .description
+        Does not sort keys, Does not return [ordered]@{}
+    .example
+        > Mint.Write-Dict ( Gci Env:\ | Mint.Convert.Dict.FromKeyValues )
+    .example
+        > $hash = Mint.Convert.Dict.FromKeyValues -InputObject ( Gci Env:\ )
+        > Mint.Write-Dict $hash
+    .example
+        > Mint.Write-Dict ( Mint.Convert.Dict.FromKeyValues -InputObject ( Gci Env:\ ) )
+    .example
+        > Mint.Write-Dict ( Mint.ConvertTo_Coerce.HashTable.FromDictionaryEntry -InputObject $sample )
+    #>
+    [Alias(
+        'Mint.ConvertTo-Hashtable.FromKeyValues',
+        'Mint.Convert-Dict.FromKeyValues',
+        # 'Mint.ConvertTo-Dict.FromKeyValues',
+        'Mint.Convert.Dict.FromKeyValues'
+        # 'Mint.Convert.Dict.FromPairs'
+        # Mint.Convert-Hash.FromDictEntry
+    )]
+    [OutputType( [System.Collections.Hashtable] )]
+    [CmdletBinding()]
+    param(
+        # hashtable or idictionary or what is best to iterate ?
+        [Alias('Pairs', 'KeyValues', 'DictionaryEntry')]
+        [Parameter( Mandatory, ValueFromPipeline )]
+        [object[]] $InputObject
+    )
+    begin {
+        [Collections.Generic.List[Object]] $List = @()
+    }
+    process {
+        $List.AddRange(@( $InputObject ))
+    }
+    end {
+        _Coerce.HashTable.FromKeyValuePairs -InputObject $List
+    }
+}
+
+function Convert-MintilsHashtableFromObject {
+    <#
+    .synopsis
+        Converts Objects into a hashtable
+    .description
+        Does not sort keys, Does not return [ordered]@{}
+    .example
+        > Mint.Write-Dict ( $Profile | Select All*, Current* | Mint.Convert.Dict.FromObject )
+    .example
+        > Get-Item . | Mint.Convert.Dict.FromObject
+    .example
+        > Mint.Write-Dict ( Get-Item '.' | Mint.Convert.Dict.FromObject  )
+    .example
+        > Get-Item '.' | Select Last*time, PSPath | Mint.Convert.Dict.FromObject | Ft -AutoSize
+
+            Name           Value
+            ----           -----
+            PSPath         Microsoft.PowerShell.Core\FileSystem::H:\data\2025\pwsh
+            LastWriteTime  2025-12-16 5:51:27 PM
+            LastAccessTime 2026-01-04 4:08:47 PM
+    #>
+    [Alias(
+        'Mint.ConvertTo-Hashtable.FromObject',
+        'Mint.Convert.Dict.FromObject'
+    )]
+    [OutputType( [System.Collections.Hashtable] )]
+    [CmdletBinding()]
+    param(
+        # hashtable or idictionary or what is best to iterate ?
+        [Alias('InObj', 'Obj', 'Target' )]
+        [Parameter( Mandatory, ValueFromPipeline )]
+        [object[]] $InputObject
+    )
+    begin {
+        [Collections.Generic.List[Object]] $List = @()
+    }
+    process {
+        $List.AddRange(@( $InputObject ))
+    }
+    end {
+        foreach( $CurObj in $List ) {
+            $hash = @{}
+            foreach( $Prop in $CurObj.PSObject.Properties ) {
+                $hash[ $Prop.Name ] = $Prop.Value
+            }
+            $hash
+        }
+    }
 }
 
 function Enable-MintilsDefaultAlias {
@@ -2303,6 +2465,8 @@ function Get-MintilsVariableSummary {
         | Sort-Object -Property Name
 }
 
+
+$script:__cache_Get_TextStyle = @{}
 function Get-MintilsTextStyle {
     <#
     .SYNOPSIS
@@ -2338,16 +2502,30 @@ function Get-MintilsTextStyle {
 
         [Parameter(Mandatory, ParameterSetName='ByListAll')]
         [Alias('All', 'List')]
-        [switch] $ListAll
+        [switch] $ListAll,
+
+         # output contains only Fg and Bg to make splatting simpler
+        [Parameter( ParameterSetName = 'ByNameLookup' )]
+        [Alias('OutputAsHash','AsHash' )]
+        [switch] $AsSplatableHash
     )
+    $CacheLookup = $script:__cache_Get_TextStyle
 
     switch( $PSCmdlet.ParameterSetName ) {
         'ByNameLookup' {
             $splat = @{
                 ByName    = $StyleName
                 OneOrNone = $OneOrNone
+                AsSplatableHash = [bool] $AsSplatableHash
             }
-            _Get-TextStyle @splat
+
+            if( $AsSplatableHash -and $CacheLookup.Contains( $StyleName ) ) {
+                return $CacheLookup[ $StyleName ]
+            }
+            $found = _Get-TextStyle @splat
+            $cacheLookup[ $StyleName ] = $found
+
+            return $found
         }
         'ByListAll' {
             _Get-TextStyle -ListAll
@@ -2453,6 +2631,101 @@ function Invoke-MintilsAppVsCode {
         }
     }
     end { }
+}
+
+
+
+function Invoke-MintilsAppWithConfirm {
+    <#
+    .SYNOPSIS
+        Invokes command line apps: with [1] user prompt to run it, and [2] log CLI args used
+    .DESCRIPTION
+        If -UseConfirm is set, it will prompt the user before invoking.
+        if false, run without requiring prompt. But logs by default.
+
+        - todo: future will support input pipeline, with confirmation
+    .example
+        # The main short syntax, without requiring parameter names
+        # [1] print the CLI args, then run without confirm
+        > Mint.Invoke-App gh 'repo', 'list'
+
+        # [2] Same thing but require confirmation
+        > Mint.Invoke-AppWithConfirm gh 'repo', 'list'
+    .example
+        # main use prompt to run a command
+        > Mint.Invoke-AppWithConfirm -Name 'code' -Args @( '--goto', $Profile.CurrentUserAllHosts ) -Confirm
+    .EXAMPLE
+        # Run the command as normal, capture results
+        # show command line args on the host
+        > $found = Mint.Invoke-AppWithConfirm -Name 'fd'
+            # out: Mint.InvokeApp => fd --color=never
+    .example
+        # Do not log cli args to host
+        $found = Mint.Invoke-AppWithConfirm -Name 'fd' -Silent
+    #>
+    [Alias(
+        'Invoke-MintilsApp',
+        'Mint.Invoke-App',
+        'Mint.Invoke-AppWithConfirm' )]
+    [CmdletBinding()]
+    param(
+        [Alias('Name')]
+        [string] $CommandName,
+
+        [Alias('Args', 'ArgList')]
+        [object[]] $CommandLineArgs,
+
+        # never run the final command
+        [Alias('TestOnly', 'EchoWithoutRun')]
+        [switch] $WhatIf,
+
+        # Default runs the command without prompt, if true then it requires a prompt.
+        # Smart aliases change the default if named 'WithConfirm'
+        [Alias('Confirm')]
+        [switch] $UseConfirm,
+
+        # The default action is to write text to the console or verbos
+        [Alias('WithoutPSHost', 'WithoutArgsEcho' )]
+        [switch] $Silent,
+
+        # Auto complete frequently used
+        [ArgumentCompletions(
+            "'--color=always'", "'--color=never'" )]
+        [string[]] $TemplateArgs
+    )
+    begin {
+        if( $PSCmdlet.MyInvocation.InvocationName -in @( 'Mint.Invoke-App', 'Invoke-MintilsApp' ) ) {
+            $UseConfirm = $false
+        }
+        if( $PSCmdlet.MyInvocation.InvocationName -match 'WithConfirm' ) {
+            $UseConfirm = $True
+        }
+        'Smart aliases resolved $UseConfirm as {0}' -f $UseConfirm | Write-Debug
+        # if( $PSCmdlet.MyInvocation.InvocationName -in @( 'Mint.Invoke-AppConfirm', 'Mint.Invoke-AppWithConfirm' ) ) {
+    }
+    end {
+        $CommandLineArgs = @( $CommandLineArgs; $TemplateArgs; )
+        [string] $RenderArgs = $CommandLineArgs | Join-String -sep ' ' -op "${CommandName} "
+
+        if( -Not $Silent ) {
+            $RenderArgs
+                | Join-String -op 'Mint.InvokeApp => '
+                | Mint.Format-TextPredent -Depth 1 -TabSize 2 | Write-Host -fg SteelBlue # -fg SlateGray -bg 'gray20'
+        }
+
+        if( $UseConfirm ) {
+            $HasConfirmed = $PSCmdlet.ShouldContinue(
+                "Execute command?: ${RenderArgs}",
+                "Invoke App: ${CommandName}" )
+            if( -not $HasConfirmed ) {
+                return
+            }
+        }
+
+        $RenderArgs | Join-String -op "Invoking => " | Write-Verbose
+        if( $WhatIf ) { return }
+        & ( Mint.Require-App $CommandName ) @CommandLineArgs
+    }
 }
 
 function New-MintilsHashSetFileSystemInfo {
@@ -3042,6 +3315,70 @@ function Select-MintilsRandomObject {
     }
 }
 
+function Write-MintilsConsoleDict {
+    <#
+    .synopsis
+        Write dictionaries to the console as key -> value pairs with color
+    .EXAMPLE
+        # The basic invoke works positionally
+        > Mint.Write-Dict @{ id = 123; color = 'blue' ; }
+        # output with colors:
+
+            color: blue
+            id: 123
+    .link
+        Mintils\Write-MintilsConsoleDict
+    .link
+        Mintils\Write-MintilsConsoleLabel
+    #>
+    [Alias('Mint.Write-ConsoleDict', 'Mint.Write-ConsoleHashtable', 'Mint.Write-Dict')]
+    # OutputType: always [Void], except when using -PassThru: output is [PoshCode.Pansies.Text]
+    [CmdletBinding()]
+    param(
+        # hashtable or idictionary or what is best to iterate ?
+        [Alias('Dict', 'Hashtable')]
+        [Collections.IDictionary]
+        $InputObject,
+
+        # for: "Mint.Write-Label -Delim"
+        # string (or none) between: <key><delim><value>
+        [Alias('TemplateDelim')]
+        [string] $Delim, # was ':',
+
+        # for: "Mint.Write-Label -ValuePrefix"
+        # space/value (or none) between: <delim> and <value>
+        [Alias('TemplateValuePrefix')]
+        [string] $ValuePrefix, # was ' ',
+
+
+        # for: "Mint.Write-Label -PassThru"
+        # Returns the (New-Text) result instead of writing to the console/Host
+        [Alias( 'WithoutWriteHost')]
+        [switch] $PassThru
+    )
+    begin {}
+    process {
+        # foreach( $Key in $InputObject.Keys)
+        [string[]] $AllKeys = $InputObject.Keys.Clone() | Sort-Object -Unique
+
+        $out = foreach( $KeyName in $AllKeys ) {
+            $label_splat = @{
+                LabelName   = $KeyName
+                InputObject = $InputObject[ $KeyName ] | Join-String -sep ', '
+            }
+            # Emit keys only when declared to preserve inner default fallback values
+            if ( $PSBoundParameters.ContainsKey( 'Delim' ) ) { $label_splat.Delim = $Delim }
+            if ( $PSBoundParameters.ContainsKey( 'ValuePrefix' ) ) { $label_splat.ValuePrefix = $ValuePrefix }
+            if ( $PSBoundParameters.ContainsKey( 'PassThru' ) ) { $label_splat.PassThru = $PassThru }
+
+            Mint.Write-Label @label_splat
+        }
+
+        if( $PassThru ) { return $out }
+        $out | Pansies\Write-Host
+    }
+}
+
 function Write-MintilsConsoleHeader {
     <#
     .synopsis
@@ -3099,6 +3436,70 @@ function Write-MintilsConsoleHeader {
             $Obj| Join-String -f "${Pad}{0}${Pad}"
                 | Pansies\Write-Host
         }
+    }
+}
+
+function Write-MintilsConsoleLabel {
+    <#
+    .synopsis
+        Write output with a label
+    .description
+        For collections the Key names are the same for each item.
+        When key names should change, see:
+            Mint.Write-ConsoleDict
+    .EXAMPLE
+        # The basic invoke works positionally
+        > Mint.Write-Label 'user' 'bob'
+        > Mint.Write-Label 'PSVersion' $PSVersionTable.PSVersion
+        # out: PSVersion: 7.5.4
+
+    .link
+        Mintils\Write-MintilsConsoleDict
+    .link
+        Mintils\Write-MintilsConsoleLabel
+    #>
+    [Alias('Mint.Write-ConsoleLabel', 'Mint.Write-Label')]
+    # OutputType: always [Void], except when using -PassThru: output is [PoshCode.Pansies.Text]
+    [CmdletBinding()]
+    param(
+        # Key Name
+        [Parameter( Mandatory, Position = 0 )]
+        [Alias('Key', 'Name')]
+        [string] $LabelName,
+
+        # Values
+        [Alias('Object', 'InObj', 'Value')]
+        [AllowEmptyCollection()]
+        [Parameter( Mandatory, ValueFromPipeline, Position = 1 )]
+        [object[]] $InputObject,
+
+        # string (or none) between: <key><delim><value>
+        [Alias('TemplateDelim')]
+        [string] $Delim = ':',
+
+        # space/value (or none) between: <delim> and <value>
+        [Alias('TemplateValuePrefix')]
+        [string] $ValuePrefix = ' ',
+
+        # Returns the (New-Text) result instead of writing to the console/Host
+        [Alias( 'WithoutWriteHost')]
+        [switch] $PassThru
+    )
+    begin {
+        $KeyColor    = Mint.Get-TextStyle -Style Dict.Key -AsSplatableHash
+        $ValueColor  = Mint.Get-TextStyle -Style Dict.Value -AsSplatableHash
+        $ResetColor = $PSStyle.Reset
+        $Prefix     = "${ResetColor}" # or '  ', "${ResetColor}  "
+    }
+    process {
+        $out = foreach( $Obj in $InputObject ) {
+            "${Prefix}{0}${Delim}${ResetColor}${ValuePrefix}{1}" -f @(
+                New-Text @KeyColor -Obj $LabelName
+                New-Text @valueColor -Obj $Obj
+            )
+        }
+        if( $PassThru ) { return $out } # is the preferred default to return as an array, or enumerate it?
+        $out | Pansies\Write-Host
     }
 }
 
