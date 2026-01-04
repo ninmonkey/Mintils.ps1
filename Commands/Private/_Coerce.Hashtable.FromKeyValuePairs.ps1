@@ -28,6 +28,13 @@
                 $hash[ $Obj.Key ] = $Obj.Value
                 continue
             }
+            if( $Item -is [System.Collections.IDictionary] ) {
+                $Item.GetEnumerator() | ForEach-Object {
+                    $hash[ $_.Key ] = $_.Value
+                }
+                continue
+            }
+
             if( $null -ne $Item.Key -and $null -ne $Item.Value ) {
                 $hash[ $Item.Key  ] = $Item.Value
                 continue
