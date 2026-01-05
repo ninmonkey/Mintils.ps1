@@ -38,7 +38,7 @@ function Require-MintilsDirectoryExists {
     }
 
     if( $WithoutCreate -and -not ( Test-Path $Resolved ) ) {
-        throw "Directory does not exist: '${Path}' ! WithoutCreate: ${WithoutCreate}, withoutForce ${WithoutForce}"
+        throw "Required Directory does not exist: '${Path}' ! ( options: WithoutCreate: ${WithoutCreate}, withoutForce ${WithoutForce} )"
     }
 
     try {

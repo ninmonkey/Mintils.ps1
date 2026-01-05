@@ -26,7 +26,7 @@ function Require-MintilsFileExists {
         return $Resolved
     }
     if( $WithoutCreate -and -not ( Test-Path $Path ) ) {
-        throw "Directory does not exist: '${Path}' ! WithoutCreate: ${WithoutCreate}, withoutForce ${WithoutForce}"
+        throw "Required File does not exist: '${Path}' ! ( options: WithoutCreate: ${WithoutCreate}, withoutForce ${WithoutForce} )"
     }
     $newItem = New-Item -Path $Path -ItemType File -Confirm:$( $Confirm ) -ea 'stop' -Force:$( -not $WithoutForce ) -ev 'evNewItem'
     if( $newItem -and ( Test-Path $newItem ) ) {
