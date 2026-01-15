@@ -16,12 +16,15 @@ function _Coerce.FileSystemInfo.FromString {
     [OutputType( [System.IO.FileInfo], [System.IO.DirectoryInfo] )]
     [CmdletBinding()]
     param(
+        [AllowEmptyCollection()]
+        [AllowNull()]
         [Parameter( Mandatory, ValueFromPipeline )]
         [string[]] $InputObject
     )
     process {
         foreach( $Str in $InputObject ) {
-            if( $null -eq $Str ) { continue }
+            if( $null -eq $Str )                  { continue }
+            if( [string]::IsNullOrEmpty( $str ) ) { continue }
 
             if( $Item = Get-Item -ea 'ignore' $Str  ) {
                 $Item

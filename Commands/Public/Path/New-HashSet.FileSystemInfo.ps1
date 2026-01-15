@@ -35,8 +35,14 @@
     )
 
     [IO.FileSystemInfo[]] $Collection = @(
-        _Coerce.FileSystemInfo.FromString -InputObject $InputCollection
+        _Coerce.FileSystemInfo.FromString -InputObject (
+            $InputCollection
+                | ?{ -not [string]::IsNullOrWhitespace( $_ ) }
+        )
     )
+    if( $InputCollection.Count -gt 0 -and $Collection.Count -eq 0 ) {
+        'Collection was empty when source has {0} items!' -f $InputCollection.count | Write-Error
+    }
 
     $Comparer = [Collections.Generic.EqualityComparer[IO.FileSystemInfo]]::Create(
             <# equals: #>      { param( $x, $y ) $x.FullName -eq $y.FullName },
