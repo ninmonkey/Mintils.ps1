@@ -74,12 +74,12 @@
             } catch {
                 $urlOrigin = ''
             }
-
             $info = [ordered]@{
                 PSTypeName = 'mintils.git.repository.record'
                 Name       = $curRepo.Name
                 RepoUrl    = $urlOrigin
-                FullName   = $curRepo
+                FullName   = $curRepo.FullName # is [string]
+                Path   = $curRepo # is [FileInfo]
                 # | Get-Item -Force -ea Continue
                 # | % Parent
             }
