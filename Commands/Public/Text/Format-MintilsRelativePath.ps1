@@ -1,4 +1,6 @@
-﻿function Format-MintilsRelativePath {
+﻿
+
+function Format-MintilsRelativePath {
     <#
     .synopsis
         Sugar that converts paths relative a base dir
@@ -11,6 +13,10 @@
 
         SeeminglyScience👨\EditorServicesProcess
         Trackd👨
+    .link
+        Mintils/Format-MintilsRelativePath
+    .link
+        Format.RelativePath
     #>
     [Alias('Mint.Format-RelativePath')]
     [OutputType( [string] )]
@@ -32,6 +38,11 @@
     process {
         $RelativeTo = Get-Item $RelativeTo
         foreach( $item in ( $Path | Convert-Path ) ) {
+            <#
+                # todo(clean): refactor, except should this ensure RelativePath always exists, else errors?
+                $relPath = Format.RelativePath -RelativeTo $RelativeTo -Path $Item
+            #>
+
             $relPath = [System.IO.Path]::GetRelativePath(
                 <# string: relativeTo #> $RelativeTo,
                 <# string: path #>  $Item )
