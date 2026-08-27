@@ -15,10 +15,10 @@
         (gmo mintils).Path | Mint.Goto -debug -PassThru | % Fullname
     #>
     [CmdletBinding()]
-    [Alias( 'Mint.Push-Location', 'Mint.Goto')]
+    [Alias( 'Mint.Push-Location', 'Mint.Goto', 'Mint.Pushd' )]
     param(
         # Goto Location of this file. Files and Directories are valid
-        
+
         [Alias('FullName')]
         [Parameter(ValueFromPipeline, ValueFromPipelineByPropertyName)]
         [Object] $InputObject,

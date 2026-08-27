@@ -44,7 +44,7 @@
     $items = @(
         # Set-Alias -PassThru -Name 'ls'   -Value Get-ChildItem
         Set-Alias @splat -Name 'Sc'   -Value Set-Content
-        Set-Alias @splat -Name 'Cl'   -Value Set-Clipboard # -Force:$true
+        # Set-Alias @splat -Name 'Cl'   -Value Set-Clipboard # -Force:$true
         Set-Alias @splat -Name 'Gcl'  -Value Get-Clipboard # -Force:$true
         Set-Alias @splat -Name 'impo' -Value Import-Module # -Force:$true
         Set-Alias @splat -Name 'Json' -Value 'Microsoft.PowerShell.Utility\ConvertTo-Json'

@@ -39,6 +39,16 @@ Describe "Mint.New-HashSet.FileSystemInfo" {
             $null -eq $hset
             | Should -be $false -because 'Instance should always be created'
         }
+        it 'FromCollection With Blanks' {
+            $Collection = @( Get-Item '.' ; '';  $null; Get-Item '../..' )
+            $hset = Mint.New-HashSet.FileInfo -Collection $Collection
+            $null -eq $hset | Should -be $False -because 'some good values should return'
+        }
+        it 'FromCollection Only Blanks' {
+            $Collection = @( '';  $null; '' )
+            $hset = Mint.New-HashSet.FileInfo -Collection $Collection
+            $null -eq $hset | Should -be $False -because 'a good empty set should return'
+        }
         It "Empty Collection" {
             $hset = Mint.New-HashSet.FileInfo
 
